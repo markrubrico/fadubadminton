@@ -7,191 +7,169 @@ import json
 from datetime import datetime
 
 # ==========================================
-# ⚙️ CONFIGURATION & SEEDS
+# ⚙️ CONFIGURATION & LEAGUE SEEDS
 # ==========================================
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
     "Kent", "Ivan", "Efren", "Jayson", "Allen", "Bombi", "AJ"
 ]
 
-TIERS = {
-    "Mythical Glory": 2750, "Mythic": 2300, "Legend": 1900,
-    "Epic": 1650, "Grandmaster": 1350, "Master": 0
-}
+TIERS = [
+    ("Mythical Glory", 2749), ("Mythic", 2299), ("Legend", 1899),
+    ("Epic", 1649), ("Grandmaster", 1349), ("Master", 0)
+]
 
-# Fetch Secure Secrets
 try:
     BRIDGE_URL = st.secrets["BRIDGE_URL"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except Exception:
-    BRIDGE_URL = "NOT_CONFIGURED"
-    GROQ_API_KEY = "NOT_CONFIGURED"
+except:
+    BRIDGE_URL = "NOT_CONFIGURED"; GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# ✨ GROQ AI SANITIZER (STABLE & FAST)
+# ✨ GROQ AI SANITIZER (FAST INFERENCE)
 # ==========================================
 def ai_sanitize_logs(raw_input):
-    if GROQ_API_KEY == "NOT_CONFIGURED":
-        return "ERROR: Missing GROQ_API_KEY in Streamlit Secrets."
-    
+    if GROQ_API_KEY == "NOT_CONFIGURED": return "ERROR: Missing GROQ_API_KEY."
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    prompt = f"""
-    You are the Data Architect for the Fadu Badminton League.
-    TASK: Convert messy logs into programmatic W/L format.
-    FORMAT: 'Game X: W: P1, P2 | L: P3, P4'
-    RULES: Keep Date Headers (e.g. 20-Feb). Return ONLY the cleaned data.
-    INPUT: {raw_input}
-    """
-    
-    payload = {
-        "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.1
-    }
-    
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+    prompt = f"Convert messy badminton logs to: 'Game X: W: P1, P2 | L: P3, P4'. Reconcile names using: {ELITE_START}. Keep Date Headers. Return ONLY the cleaned logs."
+    payload = {"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": f"{prompt}\n\nINPUT:\n{raw_input}"}], "temperature": 0.1}
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=15)
-        res_json = response.json()
-        return res_json['choices'][0]['message']['content'].strip()
-    except Exception as e:
-        return f"Groq AI Error: {str(e)}"
+        return response.json()['choices'][0]['message']['content'].strip()
+    except Exception as e: return f"AI Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v6.1
+# 🧠 DYNAMIC MMR ENGINE v8.0 (OPS MANUAL)
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
         self.elite_list = [n.strip().lower() for n in elite_list]
         self.players = {}
 
-    def get_player(self, name):
-        n_clean = name.strip()
-        n_lower = n_clean.lower()
+    def get_player(self, name, date_idx, total_dates):
+        n_clean = name.strip(); n_lower = n_clean.lower()
         if n_lower not in self.players:
-            start_mmr = 1500 if n_lower in self.elite_list else 1000
+            start = 1500 if n_lower in self.elite_list else 1000
             self.players[n_lower] = {
-                'display_name': n_clean, 'mmr': start_mmr, 'peak': start_mmr, 
-                'wins': 0, 'losses': 0, 'total_opp_mmr': 0, 'total_partner_mmr_delta': 0, 
-                'mmr_start': start_mmr, 'session_w': 0, 'session_l': 0, 
-                'last_idx': -1, 'active': False, 'win_streak': 0
+                'name': n_clean, 'mmr': start, 'peak': start, 'wins': 0, 'losses': 0,
+                't_opp': 0, 't_p_delta': 0, 'mmr_s': start, 's_w': 0, 's_l': 0, 
+                'active': False, 'is_new': (date_idx == total_dates - 1), 'win_streak': 0
             }
         return n_lower
 
     def get_tier(self, mmr):
-        for tier, threshold in TIERS.items():
-            if mmr >= threshold: return tier
+        for name, threshold in TIERS:
+            if mmr > threshold: return name
         return "Master"
 
+    def generate_remark(self, p, apd, aod, rank):
+        if p['is_new']: return "Rookie debut. Welcome!"
+        if rank == 1: return "The Final Boss. Absolute League Dominance."
+        if p['win_streak'] >= 3: return f"Heat Check! {p['win_streak']} Win Streak."
+        if apd < -250: return "Elite Anchor. Carrying the partnership."
+        if aod > 1700: return "Iron Man. Battling the heavyweights."
+        if p['s_l'] >= 3: return "Rough Night. Grind on."
+        return "Pure Hustle. A consistent force."
+
     def simulate(self, text):
-        logs = []
-        date = "Unknown"
+        logs = []; cur_date = "Unknown"
         for line in text.strip().split('\n'):
             line = line.strip()
-            if not line or line.startswith('!!'): continue
             date_m = re.match(r'^(\d{1,2}-[A-Za-z]+)', line)
-            if date_m: 
-                date = date_m.group(1)
+            if date_m: cur_date = date_m.group(1)
             elif 'W:' in line and '|' in line:
                 try:
                     p = line.split('|')
-                    w_part = p[0].split('W:')[1].strip()
-                    l_part = p[1].split('L:')[1].strip()
-                    logs.append({'date': date, 'W': [x.strip() for x in w_part.split(',')], 'L': [x.strip() for x in l_part.split(',')]})
+                    logs.append({'date': cur_date, 'W': [x.strip() for x in p[0].split('W:')[1].split(',')], 'L': [x.strip() for x in p[1].split('L:')[1].split(',')]})
                 except: continue
         
         if not logs: return pd.DataFrame()
-        dates = list(dict.fromkeys([l['date'] for l in logs]))
-        
+        dates = list(dict.fromkeys([l['date'] for l in logs])); num_dates = len(dates)
+
         for idx, d in enumerate(dates):
-            is_last = (idx == len(dates) - 1)
-            for p in self.players.values(): p['active'], p['session_w'], p['session_l'] = False, 0, 0
+            is_last = (idx == num_dates - 1)
+            for p in self.players.values(): p['active'], p['s_w'], p['s_l'] = False, 0, 0
             
             for g in [x for x in logs if x['date'] == d]:
-                wk = [self.get_player(n) for n in g['W']]
-                lk = [self.get_player(n) for n in g['L']]
-                thresh = np.percentile([p['mmr'] for p in self.players.values()], 80) if self.players else 1500
+                wk = [self.get_player(n, idx, num_dates) for n in g['W']]
+                lk = [self.get_player(n, idx, num_dates) for n in g['L']]
+                cur_mmrs = [p['mmr'] for p in self.players.values()]
+                thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
 
+                # Winners
                 for i, k in enumerate(wk):
-                    w = self.players[k]
-                    if not w['active']: w['mmr_start'], w['active'] = w['mmr'], True
-                    opp_max = max([self.players[lk_id]['mmr'] for lk_id in lk]) if lk else 1000
-                    bonus = min((opp_max - w['mmr']) * 0.25, 80) if w['mmr'] < 1349 and (opp_max - w['mmr']) > 300 else 0
-                    w['mmr'] += (40 + bonus); w['wins'] += 1; w['session_w'] += 1; w['win_streak'] += 1; w['peak'] = max(w['peak'], w['mmr'])
-                    w['total_opp_mmr'] += (sum([self.players[lk_id]['mmr'] for lk_id in lk]) / 2)
-                    w['total_partner_mmr_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
+                    w = self.players[k]; opp_mmrs = [self.players[lx]['mmr'] for lx in lk]
+                    if not w['active']: w['mmr_s'], w['active'] = w['mmr'], True
+                    bonus = min((max(opp_mmrs) - w['mmr']) * 0.2, 80) if w['mmr'] < 1349 and (max(opp_mmrs) - w['mmr']) > 300 else 0
+                    w['mmr'] += (40 + bonus); w['wins'] += 1; w['s_w'] += 1; w['peak'] = max(w['peak'], w['mmr']); w['win_streak'] += 1
+                    w['t_opp'] += (sum(opp_mmrs) / 2); w['t_p_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
 
+                # Losers
                 for i, k in enumerate(lk):
-                    l = self.players[k]; partner = self.players[lk[1-i]]
-                    if not l['active']: l['mmr_start'], l['active'] = l['mmr'], True
+                    l = self.players[k]; partner = self.players[lk[1-i]]; win_mmrs = [self.players[wx]['mmr'] for wx in wk]
+                    if not l['active']: l['mmr_s'], l['active'] = l['mmr'], True
                     loss = 10 if (l['wins'] + l['losses']) < 5 else 20
                     gap = l['mmr'] - partner['mmr']
                     if (l['mmr'] >= thresh and gap >= 150) or (partner['mmr'] >= thresh and (partner['mmr'] - l['mmr']) >= 150): loss = 16
-                    l['mmr'] -= loss; l['losses'] += 1; l['session_l'] += 1; l['win_streak'] = 0
-                    l['total_opp_mmr'] += (sum([self.players[wk_id]['mmr'] for wk_id in wk]) / 2)
-                    l['total_partner_mmr_delta'] += (partner['mmr'] - l['mmr'])
-
-            if not is_last:
-                for p in self.players.values():
-                    if p['active']: p['last_idx'] = idx
+                    l['mmr'] -= loss; l['losses'] += 1; l['s_l'] += 1; l['win_streak'] = 0
+                    l['t_opp'] += (sum(win_mmrs) / 2); l['t_p_delta'] += (partner['mmr'] - l['mmr'])
 
         res = []
         for k, p in self.players.items():
-            total = p['wins'] + p['losses']
-            if total == 0: continue
+            tot = p['wins'] + p['losses']
+            if tot == 0: continue
+            aod = round(p['t_opp'] / tot); apd = round(p['t_p_delta'] / tot)
             res.append({
-                "Rank": 0, "Player": p['display_name'], 
-                "Tier": self.get_tier(p['mmr']), "MMR": round(p['mmr']),
-                "Peak": round(p['peak']), "Session +/-": round(p['mmr'] - p['mmr_start']) if p['active'] else 0,
-                "Avg Opponent MMR": round(p['total_opp_mmr'] / total), 
-                "Avg Partner Delta": round(p['total_partner_mmr_delta'] / total),
-                "Record": f"{p['wins']}-{p['losses']}", "Session": f"{p['session_w']}-{p['session_l']}", "w": p['wins'], "key": k
+                "Rank": 0, "Player": p['name'], "Tier": self.get_tier(p['mmr']), "MMR": round(p['mmr']), "Peak": round(p['peak']),
+                "Session +/-": round(p['mmr'] - p['mmr_s']) if p['active'] else 0, "Avg Opponent MMR": aod, "Avg Partner Delta": apd,
+                "Status": "🆕 NEW PLAYER" if p['is_new'] else ("Elite" if p['mmr'] >= thresh else "Active"),
+                "Confidence": "⭐⭐⭐" if tot > 15 else "⭐⭐" if tot > 5 else "⭐",
+                "Record": f"{p['wins']}-{p['losses']}", "Session": f"{p['s_w']}-{p['s_l']}", "Power Remarks": "", "w_sort": p['wins'], "key": k
             })
-        df = pd.DataFrame(res).sort_values(by=["MMR", "w"], ascending=False)
+        
+        df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
-        return df.drop(columns=['w', 'key'])
+        for i, row in df.iterrows():
+            df.at[i, "Power Remarks"] = self.generate_remark(self.players[row['key']], row['Avg Partner Delta'], row['Avg Opponent MMR'], row['Rank'])
+        return df.drop(columns=['w_sort', 'key'])
 
 # ==========================================
-# 🎨 STREAMLIT UI
+# 🎨 UI & DASHBOARD
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v6.1", layout="wide")
+st.set_page_config(page_title="Fadu MMR Engine v8.0", layout="wide")
 if 'logs' not in st.session_state: st.session_state.logs = ""
 
 with st.sidebar:
-    st.title("🏸 Fadu Ops")
-    # Corrected Sidebar Logic
-    if BRIDGE_URL != "NOT_CONFIGURED":
-        st.success("Sheets Registry: 🟢")
-    else:
-        st.error("Sheets Registry: 🔴")
-        
-    if GROQ_API_KEY != "NOT_CONFIGURED":
-        st.success("Groq AI: 🟢")
-    else:
-        st.error("Groq AI: 🔴")
-    st.divider()
-    st.caption("v6.1 | Sidebar Fixed")
+    st.title("🏸 Fadu League Ops")
+    if BRIDGE_URL != "NOT_CONFIGURED": st.success("Registry: 🟢 Online")
+    else: st.error("Registry: 🔴 Offline")
+    if GROQ_API_KEY != "NOT_CONFIGURED": st.success("Groq AI: 🟢 Ready")
+    else: st.error("Groq AI: 🔴 No Key")
+    st.divider(); st.caption("v8.0 | Full Feature Architecture")
 
 st.title("🏸 Fadu Badminton Power Rankings")
-input_area = st.text_area("Paste Raw Match Logs:", value=st.session_state.logs, height=350)
+input_area = st.text_area("Match Logs Input:", value=st.session_state.logs, height=300)
 
-c1, c2, _ = st.columns([1.5, 1.5, 4])
+c1, c2, c3 = st.columns([1, 1, 4])
 with c1:
     if st.button("✨ AI Sanitize", type="secondary", use_container_width=True):
-        with st.spinner("Groq AI processing..."):
-            st.session_state.logs = ai_sanitize_logs(input_area)
-            st.rerun()
+        with st.spinner("AI thinking..."):
+            st.session_state.logs = ai_sanitize_logs(input_area); st.rerun()
 
 with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
-        with st.spinner("Processing Stat Trajectories..."):
+        with st.spinner("Analyzing..."):
             engine = FaduMMREngine(ELITE_START)
             leaderboard = engine.simulate(input_area)
-            st.dataframe(leaderboard, use_container_width=True, hide_index=True)
+            st.session_state.lb = leaderboard
             if BRIDGE_URL != "NOT_CONFIGURED":
                 requests.post(BRIDGE_URL, json={"target": "Registry", "headers": leaderboard.columns.tolist(), "values": leaderboard.values.tolist()})
-                st.success("Synced to Sheets!")
+                st.toast("Registry Synced!")
+
+if 'lb' in st.session_state:
+    st.divider()
+    search = st.text_input("🔍 Search Player:", placeholder="Type a name to filter the table...")
+    display_df = st.session_state.lb
+    if search: display_df = display_df[display_df['Player'].str.contains(search, case=False)]
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
