@@ -6,7 +6,7 @@ import requests
 import json
 
 # ==========================================
-# ⚙️ CONFIGURATION & SEEDING
+# ⚙️ CONFIGURATION & SEEDING (COMPLIANT)
 # ==========================================
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
@@ -26,7 +26,7 @@ except:
     GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# 🔍 AI AUDITOR (ANTI-DUPE & TYPO HUNTER)
+# 🔍 AI AUDITOR (DUPE, TYPO & DEBUT HUNTER)
 # ==========================================
 def ai_audit_session(raw_input, established_players):
     if GROQ_API_KEY == "NOT_CONFIGURED": return "ERROR: Missing GROQ_API_KEY."
@@ -40,27 +40,20 @@ def ai_audit_session(raw_input, established_players):
     
     prompt = f"""
     You are the Senior Auditor for Fadu Badminton. 
-    Analyze the ACTIVE SESSION and compare it with the HISTORICAL LOGS.
-
-    ESTABLISHED ROSTER: {established_players}
-
+    Analyze the ACTIVE SESSION vs HISTORICAL LOGS.
+    ROSTER: {established_players}
+    
     TASKS:
-    1. **DUPLICATE DATE CHECK:** If the date of the active session appears in the historical logs, flag it.
-    2. **GAME NUMBER CHECK:** Ensure game numbers are sequential and do not reset (e.g. 'Game 1' twice on same date).
-    3. **TYPO CHECK:** Identify names like 'Mich' instead of 'Mitch' or 'Bradd' instead of 'Brad'.
-    4. **DEBUT CHECK:** Identify completely new players.
-
-    OUTPUT FORMAT:
-    | Category | Finding | Game(s) |
-    | :--- | :--- | :--- |
-    | Duplicate Date | [Status] | [N/A] |
-    | Typo Hunter | [Name] -> [Fix] | [Game X] |
-    | New Player Debut | [Name] | [Game X] |
+    1. DUPLICATE DATE: Flag if active date exists in history.
+    2. TYPOS: Flag phonetic near-misses (e.g., Mich/Mitch, Bradd/Brad).
+    3. DEBUTS: Flag names not in established roster.
+    
+    OUTPUT: Markdown Table with Name, Issue Type, Suggestion, and Game X.
     """
     
     payload = {
         "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": f"{prompt}\n\nHISTORICAL:\n{historical_logs}\n\nACTIVE:\n{active_session}"}],
+        "messages": [{"role": "user", "content": f"{prompt}\n\nACTIVE:\n{active_session}"}],
         "temperature": 0.0
     }
     
@@ -70,7 +63,7 @@ def ai_audit_session(raw_input, established_players):
     except Exception as e: return f"Audit Error: {str(e)}"
 
 # ==========================================
-# 🧠 MMR ENGINE (13-COLUMN LOGIC)
+# 🧠 MMR ENGINE (FULL 13-COLUMN ARCHITECTURE)
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -103,6 +96,9 @@ class FaduMMREngine:
         return "Pure Hustle. A consistent force."
 
     def simulate(self, text):
+        # Crash-Proof Guard for Empty Input
+        if not text.strip(): return pd.DataFrame(), "None", sorted(list(set(self.elite_list)))
+        
         logs = []; cur_date = "Unknown"
         for line in text.strip().split('\n'):
             line = line.strip()
@@ -114,7 +110,8 @@ class FaduMMREngine:
                     logs.append({'date': cur_date, 'W': [x.strip() for x in p[0].split('W:')[1].split(',')], 'L': [x.strip() for x in p[1].split('L:')[1].split(',')]})
                 except: continue
         
-        if not logs: return pd.DataFrame(), "None", []
+        if not logs: return pd.DataFrame(), cur_date, sorted(list(set(self.elite_list)))
+        
         dates = list(dict.fromkeys([l['date'] for l in logs])); num_dates = len(dates)
         last_date = dates[-1]; established_names = set(self.elite_list)
 
@@ -127,8 +124,9 @@ class FaduMMREngine:
                 lk = [self.get_player(n, idx, num_dates) for n in g['L']]
                 if not is_last: established_names.update(wk); established_names.update(lk)
                 
-                mmrs = [p['mmr'] for p in self.players.values()]; thresh = np.percentile(mmrs, 80) if mmrs else 1500
+                cur_mmrs = [p['mmr'] for p in self.players.values()]; thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
 
+                # Winners (Giant Slayer Logic Included)
                 for i, k in enumerate(wk):
                     w = self.players[k]; opp_mmrs = [self.players[lx]['mmr'] for lx in lk]
                     if not w['active']: w['mmr_s'], w['active'] = w['mmr'], True
@@ -136,6 +134,7 @@ class FaduMMREngine:
                     w['mmr'] += (40 + bonus); w['wins'] += 1; w['s_w'] += 1; w['peak'] = max(w['peak'], w['mmr']); w['win_streak'] += 1
                     w['t_opp'] += (sum(opp_mmrs) / 2); w['t_p_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
 
+                # Losers (Guardian & Rookie Shield Included)
                 for i, k in enumerate(lk):
                     l = self.players[k]; partner = self.players[lk[1-i]]; win_mmrs = [self.players[wx]['mmr'] for wx in wk]
                     if not l['active']: l['mmr_s'], l['active'] = l['mmr'], True
@@ -162,28 +161,25 @@ class FaduMMREngine:
         df['Rank'] = range(1, len(df) + 1)
         for i, row in df.iterrows():
             df.at[i, "Power Remarks"] = self.generate_remark(self.players[row['key']], row['Avg Partner Delta'], row['Avg Opponent MMR'], row['Rank'])
-        return df.drop(columns=['w_sort', 'key'])
+        return df.drop(columns=['w_sort', 'key']), last_date, sorted(list(established_names))
 
 # ==========================================
-# 🎨 UI & DASHBOARD
+# 🎨 UI & DASHBOARD (WIDESCREEN)
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v10.2", layout="wide")
+st.set_page_config(page_title="Fadu MMR Engine v10.2.2", layout="wide")
 
 with st.sidebar:
     st.title("🏸 Fadu Ops")
-    # Ironclad Sidebar Logic
+    # Clean Sidebar Logic (Prevents DeltaGenerator Text Leaks)
     if BRIDGE_URL != "NOT_CONFIGURED":
         st.success("Sheets Registry: 🟢 Online")
     else:
         st.error("Sheets Registry: 🔴 Offline")
-        
     if GROQ_API_KEY != "NOT_CONFIGURED":
         st.success("AI Auditor: 🟢 Online")
     else:
         st.error("AI Auditor: 🔴 No Key")
-    
-    st.divider()
-    st.caption("v10.2 | Ironclad Architecture")
+    st.divider(); st.caption("v10.2.2 | Ironclad Build")
 
 st.title("🏸 Fadu Badminton Power Rankings")
 input_area = st.text_area("Match Logs Input:", height=300, placeholder="Paste your logs here...")
@@ -191,40 +187,34 @@ input_area = st.text_area("Match Logs Input:", height=300, placeholder="Paste yo
 c1, c2, _ = st.columns([1.5, 1.5, 4])
 with c1:
     if st.button("🔍 Run Session Audit", use_container_width=True):
-        if not input_area: st.warning("Please paste logs first.")
+        if not input_area.strip(): st.warning("Please paste logs first.")
         else:
             with st.spinner("Analyzing for duplicates and typos..."):
                 engine = FaduMMREngine(ELITE_START)
                 _, _, established = engine.simulate(input_area)
                 st.session_state.audit_report = ai_audit_session(input_area, established)
 
-# Wide-view Audit Report
 if 'audit_report' in st.session_state:
     st.info(f"### 📋 Active Session Audit\n{st.session_state.audit_report}")
-    if st.button("Close Audit Report"):
-        del st.session_state.audit_report
-        st.rerun()
+    if st.button("Close Audit"): del st.session_state.audit_report; st.rerun()
 
 with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
-        if not input_area: st.warning("No logs to process.")
+        if not input_area.strip(): st.warning("Please paste logs first.")
         else:
-            with st.spinner("Calculating MMR trajectories..."):
+            with st.spinner("Processing..."):
                 engine = FaduMMREngine(ELITE_START)
-                lb, last_d, _ = engine.simulate(input_area)
-                st.session_state.lb, st.session_state.last_date = lb, last_d
+                lb, last_date, _ = engine.simulate(input_area)
+                st.session_state.lb, st.session_state.last_date = lb, last_date
                 if BRIDGE_URL != "NOT_CONFIGURED":
                     resp = requests.post(BRIDGE_URL, json={"target": "Registry", "headers": lb.columns.tolist(), "values": lb.values.tolist()})
-                    if resp.status_code == 200:
-                        st.toast(f"✅ Sync Successful: {len(lb)} rows updated.")
-                    else:
-                        st.error(f"❌ Sync Failed: {resp.text}")
+                    if resp.status_code == 200: st.toast(f"✅ Sync Successful: {len(lb)} rows updated.")
+                    else: st.error(f"❌ Sync Failed: {resp.text}")
 
 if 'lb' in st.session_state:
     st.divider()
     st.subheader(f"📅 Session: {st.session_state.last_date}")
-    search = st.text_input("🔍 Search Player:", placeholder="Type a name to filter the table...")
-    df_display = st.session_state.lb
-    if search:
-        df_display = df_display[df_display['Player'].str.contains(search, case=False)]
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    search = st.text_input("🔍 Search Player:", placeholder="Filter by name...")
+    df_disp = st.session_state.lb
+    if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
+    st.dataframe(df_disp, use_container_width=True, hide_index=True)
