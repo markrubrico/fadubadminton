@@ -168,3 +168,38 @@ class FaduMMREngine:
             df.at[i, "Remarks"] = self._generate_remark(self.players[row['key']], row['APD'], row['AOD'], row['Rank'])
         
         return df.drop(columns=['w_sort', 'key'])
+    
+
+    def get_rivalry_matrix(self, text, target_player):
+        """Generates a win/loss matrix against every opponent for a specific player."""
+        if not target_player: return None
+        target = self.clean_name(target_player).lower()
+        matrix = {} # Key: Opponent, Value: {Wins, Losses}
+        
+        logs = self._parse_to_list(text)
+        for g in logs:
+            wk = [self.clean_name(n).lower() for n in g['W']]
+            lk = [self.clean_name(n).lower() for n in g['L']]
+            
+            # If target player won, increment wins against all losers
+            if target in wk:
+                for opp in lk:
+                    opp_name = opp.title() # Format nicely
+                    if opp_name not in matrix: matrix[opp_name] = {"Wins": 0, "Losses": 0}
+                    matrix[opp_name]["Wins"] += 1
+            
+            # If target player lost, increment losses against all winners
+            if target in lk:
+                for opp in wk:
+                    opp_name = opp.title()
+                    if opp_name not in matrix: matrix[opp_name] = {"Wins": 0, "Losses": 0}
+                    matrix[opp_name]["Losses"] += 1
+                    
+        if not matrix: return None
+        
+        # Convert to DataFrame for UI
+        df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
+        df.columns = ["Opponent", "Wins", "Losses"]
+        df["Total"] = df["Wins"] + df["Losses"]
+        df["Win Rate"] = (df["Wins"] / df["Total"]).map(lambda n: f"{n:.0%}")
+        return df.sort_values(by=["Total", "Wins"], ascending=False)

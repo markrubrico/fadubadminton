@@ -130,3 +130,29 @@ if 'lb' in st.session_state:
                 st.table(pd.DataFrame(h2h["matches"]))
             else:
                 st.warning(f"No matches found in the current logs between {hero} and {rival}.")
+
+
+        # Inside 'with tab2:' in app.py, below the individual H2H section:
+
+        st.divider()
+        st.subheader(f"📊 {hero}'s Full Opponent Matrix")
+        st.caption("See performance against everyone they've ever faced.")
+        
+        if st.button(f"Generate Career Matrix for {hero}", use_container_width=True):
+            engine = FaduMMREngine()
+            matrix_df = engine.get_rivalry_matrix(input_area, hero)
+            
+            if matrix_df is not None:
+                # Adding a bit of "Heatmap" styling to make it look professional
+                def color_winrate(val):
+                    pct = int(val.replace('%', ''))
+                    color = 'red' if pct < 40 else 'green' if pct > 60 else 'gray'
+                    return f'color: {color}'
+
+                st.dataframe(
+                    matrix_df.style.applymap(color_winrate, subset=['Win Rate']),
+                    use_container_width=True, 
+                    hide_index=True
+                )
+            else:
+                st.warning("No opponent data found for this player in the logs.")
