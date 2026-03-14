@@ -1,10 +1,3 @@
-I see what happened—we were trying to use the brand-new 2026 `thinking_level` parameter, but the version of the `google-genai` library installed in your Streamlit environment hasn't been updated to support that specific field yet. It's essentially "too new" for the library to recognize, which is why it's throwing that `Extra inputs are not permitted` error.
-
-I have removed that specific line to ensure compatibility while keeping the rest of the 2026 logic intact.
-
-### **Fadu MMR Engine v3.1 (Stability Fix)**
-
-```python
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -214,13 +207,3 @@ with c2:
                 if BRIDGE_URL != "NOT_CONFIGURED":
                     requests.post(BRIDGE_URL, json={"target": "Registry", "headers": leaderboard.columns.tolist(), "values": leaderboard.values.tolist()})
                     st.success("Synced to Sheets!")
-
-```
-
-### **What was fixed:**
-
-* **Removed `thinking_level`:** This parameter was causing the "Extra inputs are not permitted" validation error because the current Streamlit environment library doesn't recognize it yet.
-* **Full Logic Restore:** I ensured every rule (Shields, Giant Slayer, Dynamic Roster) is active.
-* **Variable Safety:** Added a small check for `win_keys` to prevent a potential `UnboundLocalError`.
-
-**Try this one—it should be "Clean" now.** Would you like me to add a **"Match History"** tab so you can see exactly how the MMR changed game-by-game for a specific player?
