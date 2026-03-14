@@ -47,3 +47,48 @@ if 'lb' in st.session_state:
     st.metric("Session Wealth Drift", f"{st.session_state.drift} MMR")
     st.subheader(f"📅 Session: {st.session_state.date}")
     st.dataframe(st.session_state.lb, use_container_width=True, hide_index=True)
+
+
+# Add this to the bottom of app.py
+
+st.divider()
+st.subheader("⚔️ Head-to-Head Rivalry")
+tab1, tab2 = st.tabs(["Leaderboard", "H2H Lookup"])
+
+with tab1:
+    if 'lb' in st.session_state:
+        st.metric("Session Wealth Drift", f"{st.session_state.drift} MMR")
+        st.dataframe(st.session_state.lb, use_container_width=True, hide_index=True)
+
+with tab2:
+    if 'lb' in st.session_state:
+        player_list = sorted(st.session_state.lb['Player'].tolist())
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            hero = st.selectbox("Select Player 1:", player_list, index=0)
+        with col2:
+            rival = st.selectbox("Select Player 2:", player_list, index=1)
+            
+        if st.button("Analyze Rivalry"):
+            engine = FaduMMREngine()
+            h2h = engine.get_h2h(input_area, hero, rival)
+            
+            if h2h and h2h["matches"]:
+                total = h2h["p1_wins"] + h2h["p2_wins"]
+                st.write(f"### {hero} vs {rival}")
+                
+                # Big Score Display
+                s1, s2, s3 = st.columns(3)
+                s1.metric(f"{hero} Wins", h2h["p1_wins"])
+                s2.metric("Total Meetings", total)
+                s3.metric(f"{rival} Wins", h2h["p2_wins"])
+                
+                # Progress bar for visual win-rate
+                win_rate = h2h["p1_wins"] / total
+                st.progress(win_rate, text=f"{hero} Dominance: {win_rate:.0%}")
+                
+                # Match History Table
+                st.table(pd.DataFrame(h2h["matches"]))
+            else:
+                st.warning("No matches found between these two players yet.")

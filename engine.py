@@ -85,3 +85,43 @@ class FaduMMREngine:
         for i, row in df.iterrows():
             df.at[i, "Remarks"] = self._generate_remark(self.players[row['key']], row['APD'], row['AOD'], row['Rank'])
         return df.drop(columns=['w_sort', 'key'])
+    
+
+    # Add this method inside the FaduMMREngine class in engine.py
+
+    def get_h2h(self, text, p1_name, p2_name):
+        """Scans logs to find games where P1 and P2 faced off."""
+        if not p1_name or not p2_name: return None
+        
+        p1 = self.clean_name(p1_name).lower()
+        p2 = self.clean_name(p2_name).lower()
+        
+        h2h_stats = {"p1_wins": 0, "p2_wins": 0, "matches": []}
+        logs = self._parse_to_list(text) # Re-using your parser
+        
+        for g in logs:
+            wk = [self.clean_name(n).lower() for n in g['W']]
+            lk = [self.clean_name(n).lower() for n in g['L']]
+            
+            # Case 1: P1 Won, P2 Lost
+            if p1 in wk and p2 in lk:
+                h2h_stats["p1_wins"] += 1
+                h2h_stats["matches"].append({"Date": g['date'], "Winner": p1_name, "Loser": p2_name})
+            
+            # Case 2: P2 Won, P1 Lost
+            if p2 in wk and p1 in lk:
+                h2h_stats["p2_wins"] += 1
+                h2h_stats["matches"].append({"Date": g['date'], "Winner": p2_name, "Loser": p1_name})
+                
+        return h2h_stats
+
+    def _parse_to_list(self, text):
+        """Helper to get a list of games from raw text."""
+        logs = []; cur_date = "Unknown"
+        for line in text.strip().split('\n'):
+            date_m = re.match(r'^(\d{1,2}-[A-Za-z]+)', line.strip())
+            if date_m: cur_date = date_m.group(1)
+            elif 'W:' in line and '|' in line:
+                p = line.split('|')
+                logs.append({'date': cur_date, 'W': [x.strip() for x in p[0].split('W:')[1].split(',')], 'L': [x.strip() for x in p[1].split('L:')[1].split(',')]})
+        return logs
