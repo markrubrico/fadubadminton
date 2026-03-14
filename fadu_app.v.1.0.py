@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # ==========================================
-# ⚙️ CONFIGURATION & SEEDING
+# ⚙️ CONFIGURATION & SEEDS
 # ==========================================
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
@@ -19,16 +19,16 @@ TIERS = {
     "Epic": 1650, "Grandmaster": 1350, "Master": 0
 }
 
-# Load Secrets (Update your Streamlit Secrets to include GROQ_API_KEY)
+# Fetch Secure Secrets
 try:
     BRIDGE_URL = st.secrets["BRIDGE_URL"]
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"] 
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except Exception:
     BRIDGE_URL = "NOT_CONFIGURED"
     GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# ✨ AI SANITIZER (GROQ + LLAMA 3.3)
+# ✨ GROQ AI SANITIZER (STABLE & FAST)
 # ==========================================
 def ai_sanitize_logs(raw_input):
     if GROQ_API_KEY == "NOT_CONFIGURED":
@@ -42,33 +42,27 @@ def ai_sanitize_logs(raw_input):
     
     prompt = f"""
     You are the Data Architect for the Fadu Badminton League.
-    TASK: Convert messy, conversational logs into programmatic W/L format.
-    
-    STRICT RULES:
-    1. OUTPUT FORMAT: 'Game X: W: P1, P2 | L: P3, P4'
-    2. LOGIC: Reconcile all names and fix typos.
-    3. DATES: Keep lines like '20-Feb' exactly as they are.
-    4. NO CONVERSATION: Return ONLY the cleaned logs.
-    
-    INPUT:
-    {raw_input}
+    TASK: Convert messy logs into programmatic W/L format.
+    FORMAT: 'Game X: W: P1, P2 | L: P3, P4'
+    RULES: Keep Date Headers (e.g. 20-Feb). Return ONLY the cleaned data.
+    INPUT: {raw_input}
     """
     
-    data = {
+    payload = {
         "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.1
     }
     
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=15)
+        response = requests.post(url, headers=headers, json=payload, timeout=15)
         res_json = response.json()
         return res_json['choices'][0]['message']['content'].strip()
     except Exception as e:
         return f"Groq AI Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v5.2 (FULL LOGIC)
+# 🧠 DYNAMIC MMR ENGINE v6.1
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -88,13 +82,10 @@ class FaduMMREngine:
             }
         return n_lower
 
-    def generate_remark(self, p, apd, aod, thresh, rank):
-        if rank == 1: return "The Final Boss. Absolute League Dominance."
-        if p['win_streak'] >= 3: return f"Heat Check! {p['win_streak']} Game Win Streak."
-        if apd < -250: return "The Anchor. Carrying the partnership weight."
-        if aod > 1650: return "Iron Man. Battling the league heavyweights."
-        if p['session_l'] >= 3: return "Rough Night. The grind continues."
-        return "Pure Hustle. A consistent force."
+    def get_tier(self, mmr):
+        for tier, threshold in TIERS.items():
+            if mmr >= threshold: return tier
+        return "Master"
 
     def simulate(self, text):
         logs = []
@@ -103,13 +94,14 @@ class FaduMMREngine:
             line = line.strip()
             if not line or line.startswith('!!'): continue
             date_m = re.match(r'^(\d{1,2}-[A-Za-z]+)', line)
-            if date_m: date = date_m.group(1)
-            elif 'W:' in line:
+            if date_m: 
+                date = date_m.group(1)
+            elif 'W:' in line and '|' in line:
                 try:
                     p = line.split('|')
-                    w_list = [n.strip() for n in p[0].split('W:')[1].split(',')]
-                    l_list = [n.strip() for n in p[1].split('L:')[1].split(',')]
-                    logs.append({'date': date, 'W': w_list, 'L': l_list})
+                    w_part = p[0].split('W:')[1].strip()
+                    l_part = p[1].split('L:')[1].strip()
+                    logs.append({'date': date, 'W': [x.strip() for x in w_part.split(',')], 'L': [x.strip() for x in l_part.split(',')]})
                 except: continue
         
         if not logs: return pd.DataFrame()
@@ -153,38 +145,44 @@ class FaduMMREngine:
             if total == 0: continue
             res.append({
                 "Rank": 0, "Player": p['display_name'], 
-                "Tier": next(t for t, v in TIERS.items() if p['mmr'] >= v), "MMR": round(p['mmr']),
+                "Tier": self.get_tier(p['mmr']), "MMR": round(p['mmr']),
                 "Peak": round(p['peak']), "Session +/-": round(p['mmr'] - p['mmr_start']) if p['active'] else 0,
                 "Avg Opponent MMR": round(p['total_opp_mmr'] / total), 
                 "Avg Partner Delta": round(p['total_partner_mmr_delta'] / total),
                 "Record": f"{p['wins']}-{p['losses']}", "Session": f"{p['session_w']}-{p['session_l']}", "w": p['wins'], "key": k
             })
-        
         df = pd.DataFrame(res).sort_values(by=["MMR", "w"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
-        df["Power Remarks"] = df.apply(lambda r: self.generate_remark(self.players[r['key']], r['Avg Partner Delta'], r['Avg Opponent MMR'], thresh, r['Rank']), axis=1)
         return df.drop(columns=['w', 'key'])
 
 # ==========================================
-# 📊 STREAMLIT UI
+# 🎨 STREAMLIT UI
 # ==========================================
-st.set_page_config(page_title="Fadu MMR v5.0", layout="wide", page_icon="🏸")
+st.set_page_config(page_title="Fadu MMR Engine v6.1", layout="wide")
 if 'logs' not in st.session_state: st.session_state.logs = ""
 
 with st.sidebar:
     st.title("🏸 Fadu Ops")
-    st.success("Sheets Registry: 🟢") if BRIDGE_URL != "NOT_CONFIGURED" else st.error("Sheets Registry: 🔴")
-    st.success("Groq Llama 3: 🟢") if GROQ_API_KEY != "NOT_CONFIGURED" else st.error("Groq AI: 🔴 No Key")
+    # Corrected Sidebar Logic
+    if BRIDGE_URL != "NOT_CONFIGURED":
+        st.success("Sheets Registry: 🟢")
+    else:
+        st.error("Sheets Registry: 🔴")
+        
+    if GROQ_API_KEY != "NOT_CONFIGURED":
+        st.success("Groq AI: 🟢")
+    else:
+        st.error("Groq AI: 🔴")
     st.divider()
-    st.caption("v5.0 | Groq Optimization")
+    st.caption("v6.1 | Sidebar Fixed")
 
 st.title("🏸 Fadu Badminton Power Rankings")
-input_area = st.text_area("Match Logs Input:", value=st.session_state.logs, height=350)
+input_area = st.text_area("Paste Raw Match Logs:", value=st.session_state.logs, height=350)
 
 c1, c2, _ = st.columns([1.5, 1.5, 4])
 with c1:
     if st.button("✨ AI Sanitize", type="secondary", use_container_width=True):
-        with st.spinner("Groq AI thinking..."):
+        with st.spinner("Groq AI processing..."):
             st.session_state.logs = ai_sanitize_logs(input_area)
             st.rerun()
 
