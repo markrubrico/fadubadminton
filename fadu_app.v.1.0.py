@@ -32,7 +32,7 @@ except Exception:
     GEMINI_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# 🎨 CUSTOM CSS UI ENHANCEMENTS
+# 🎨 CUSTOM UI STYLING
 # ==========================================
 st.markdown("""
     <style>
@@ -44,19 +44,19 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # ==========================================
-# ✨ ADVANCED AI SANITIZER (STABLE REST API)
+# ✨ ADVANCED AI SANITIZER (REST API)
 # ==========================================
 def ai_sanitize_logs(raw_input):
     if GEMINI_API_KEY == "NOT_CONFIGURED":
-        return "ERROR: Missing API Key in Streamlit Secrets."
+        return "ERROR: Missing API Key in Secrets."
     
-    # URL Path specifically corrected to v1beta/models/gemini-1.5-flash
+    # Path corrected to v1beta/models/gemini-1.5-flash
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     prompt = f"""
     You are a Master Data Parser for the Fadu Badminton League. 
-    Transform messy logs into: 'Game X: W: P1, P2 | L: P3, P4'
-    Logic: Identify winners/losers from context. Map nicknames to the official names in: {ELITE_START}. 
+    Transform messy logs to: 'Game X: W: P1, P2 | L: P3, P4'
+    Logic: Identify winners/losers from context. Map names to: {ELITE_START}. 
     Keep Date Headers (e.g. 20-Feb). Return ONLY cleaned logs.
     INPUT: {raw_input}
     """
@@ -66,21 +66,15 @@ def ai_sanitize_logs(raw_input):
     
     try:
         response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=25)
-        # Fallback to standard v1 if v1beta fails
-        if response.status_code == 404:
-            url_v1 = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-            response = requests.post(url_v1, headers=headers, data=json.dumps(payload), timeout=25)
-            
         res_json = response.json()
         if "candidates" in res_json:
             return res_json['candidates'][0]['content']['parts'][0]['text'].strip()
-        return f"AI Error: {res_json.get('error', {}).get('message', 'Key Issue')}"
-            
+        return f"AI Error: {res_json.get('error', {}).get('message', 'Check key permissions.')}"
     except Exception as e:
         return f"Request Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v4.5 (MODULAR)
+# 🧠 DYNAMIC MMR ENGINE v4.5 (FULL ARCHITECTURE)
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -88,6 +82,7 @@ class FaduMMREngine:
         self.players = {}
 
     def get_player(self, name):
+        """Builds roster dynamically from logs."""
         n_clean = name.strip()
         n_lower = n_clean.lower()
         if n_lower not in self.players:
@@ -106,6 +101,7 @@ class FaduMMREngine:
         return "Master"
 
     def generate_power_remark(self, p, apd, aod, elite_thresh, rank):
+        """Full 7-branch Logic from Ops Manual."""
         if p.get('is_new_to_league', False) and p['active_this_session']:
             return f"Welcome! Rookie debut with {p['session_w']}-{p['session_l']} record."
         if rank == 1: return "The Final Boss. Absolute League Dominance."
@@ -196,19 +192,31 @@ class FaduMMREngine:
         return df.drop(columns=['w'])
 
 # ==========================================
-# 📊 STREAMLIT DASHBOARD UI
+# 📊 STREAMLIT INTERFACE
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v1.75", layout="wide")
+st.set_page_config(page_title="Fadu MMR Engine v1.8", layout="wide", page_icon="🏸")
 if 'cleaned_logs_state' not in st.session_state: st.session_state.cleaned_logs_state = ""
 
 with st.sidebar:
     st.title("Fadu League Ops")
-    st.success("Sheets: 🟢") if BRIDGE_URL != "NOT_CONFIGURED" else st.error("Sheets: 🔴")
+    # Corrected Sidebar Logic (Properly formatted)
+    if BRIDGE_URL != "NOT_CONFIGURED":
+        st.success("Sheets: 🟢 Online")
+    else:
+        st.error("Sheets: 🔴 Offline")
+        
     if GEMINI_API_KEY != "NOT_CONFIGURED":
         try:
             r = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash?key={GEMINI_API_KEY}", timeout=5)
-            st.success("AI: 🟢 READY") if r.status_code == 200 else st.error("AI: 🟡 Error")
-        except: st.error("AI: 🔴 Offline")
+            if r.status_code == 200:
+                st.success("AI: 🟢 READY")
+            else:
+                st.error(f"AI: 🟡 Error {r.status_code}")
+        except Exception:
+            st.error("AI: 🔴 Offline")
+    else:
+        st.error("AI: 🔴 Missing Key")
+        
     st.info("**Brackets**\nMythic Glory: 2750+\nMythic: 2300\nLegend: 1900\nEpic: 1650\nGM: 1350")
 
 st.title("🏸 Fadu Badminton Power Rankings")
@@ -228,10 +236,13 @@ with c2:
         if not input_logs: st.warning("No logs.")
         else:
             with st.spinner("Calculating..."):
-                engine = FaduMMREngine(ELITE_START)
-                res = engine.simulate(input_logs)
-                st.dataframe(res, use_container_width=True, hide_index=True)
-                if BRIDGE_URL != "NOT_CONFIGURED":
-                    requests.post(BRIDGE_URL, json={"target": "Registry", "headers": res.columns.tolist(), "values": res.values.tolist()})
-                    st.success("Synced!")
-st.caption(f"v1.75 | {datetime.now().strftime('%Y-%m-%d')}")
+                try:
+                    engine = FaduMMREngine(ELITE_START)
+                    res = engine.simulate(input_logs)
+                    st.dataframe(res, use_container_width=True, hide_index=True)
+                    if BRIDGE_URL != "NOT_CONFIGURED":
+                        requests.post(BRIDGE_URL, json={"target": "Registry", "headers": res.columns.tolist(), "values": res.values.tolist()})
+                        st.success("Synced to Sheets!")
+                except Exception as e:
+                    st.error(f"Engine Error: {str(e)}")
+st.caption(f"v1.8 | {datetime.now().strftime('%Y-%m-%d')}")
