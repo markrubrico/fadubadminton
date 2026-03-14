@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # ==========================================
-# ⚙️ CONFIGURATION & LEAGUE SEEDS
+# ⚙️ LEAGUE CONFIGURATION & SEEDING
 # ==========================================
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
@@ -26,21 +26,46 @@ except:
     BRIDGE_URL = "NOT_CONFIGURED"; GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# ✨ GROQ AI SANITIZER (FAST INFERENCE)
+# 🔍 AI AUDITOR (GROQ LLAMA 3.3)
 # ==========================================
-def ai_sanitize_logs(raw_input):
+def ai_audit_logs(raw_input):
+    """
+    Scans logs for errors without changing the data.
+    """
     if GROQ_API_KEY == "NOT_CONFIGURED": return "ERROR: Missing GROQ_API_KEY."
+    
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-    prompt = f"Convert messy badminton logs to: 'Game X: W: P1, P2 | L: P3, P4'. Reconcile names using: {ELITE_START}. Keep Date Headers. Return ONLY the cleaned logs."
-    payload = {"model": "llama-3.3-70b-versatile", "messages": [{"role": "user", "content": f"{prompt}\n\nINPUT:\n{raw_input}"}], "temperature": 0.1}
+    
+    prompt = f"""
+    You are the Auditor for the Fadu Badminton League. 
+    Review these match logs and list specific concerns by Date and Game Number.
+    
+    CHECK FOR:
+    1. Missing players (must have 2 winners, 2 losers).
+    2. Unknown names not in this roster: {ELITE_START}.
+    3. Confusing winning/losing results.
+    
+    FORMAT: 
+    - [Date] Game [X]: [Reason]
+    
+    If everything looks perfect, say 'Logs Verified: No issues found.'
+    DO NOT rewrite the logs. Just list the issues.
+    """
+    
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": f"{prompt}\n\nINPUT:\n{raw_input}"}],
+        "temperature": 0.0
+    }
+    
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=15)
         return response.json()['choices'][0]['message']['content'].strip()
-    except Exception as e: return f"AI Error: {str(e)}"
+    except Exception as e: return f"Audit Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v8.0 (OPS MANUAL)
+# 🧠 DYNAMIC MMR ENGINE v9.0
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -64,7 +89,7 @@ class FaduMMREngine:
         return "Master"
 
     def generate_remark(self, p, apd, aod, rank):
-        if p['is_new']: return "Rookie debut. Welcome!"
+        if p['is_new']: return "🆕 New Player debut. Welcome!"
         if rank == 1: return "The Final Boss. Absolute League Dominance."
         if p['win_streak'] >= 3: return f"Heat Check! {p['win_streak']} Win Streak."
         if apd < -250: return "Elite Anchor. Carrying the partnership."
@@ -81,7 +106,10 @@ class FaduMMREngine:
             elif 'W:' in line and '|' in line:
                 try:
                     p = line.split('|')
-                    logs.append({'date': cur_date, 'W': [x.strip() for x in p[0].split('W:')[1].split(',')], 'L': [x.strip() for x in p[1].split('L:')[1].split(',')]})
+                    w_list = [x.strip() for x in p[0].split('W:')[1].split(',')]
+                    l_list = [x.strip() for x in p[1].split('L:')[1].split(',')]
+                    if len(w_list) >= 2 and len(l_list) >= 2:
+                        logs.append({'date': cur_date, 'W': w_list, 'L': l_list})
                 except: continue
         
         if not logs: return pd.DataFrame()
@@ -94,13 +122,13 @@ class FaduMMREngine:
             for g in [x for x in logs if x['date'] == d]:
                 wk = [self.get_player(n, idx, num_dates) for n in g['W']]
                 lk = [self.get_player(n, idx, num_dates) for n in g['L']]
-                cur_mmrs = [p['mmr'] for p in self.players.values()]
-                thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
+                cur_mmrs = [p['mmr'] for p in self.players.values()]; thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
 
                 # Winners
                 for i, k in enumerate(wk):
                     w = self.players[k]; opp_mmrs = [self.players[lx]['mmr'] for lx in lk]
                     if not w['active']: w['mmr_s'], w['active'] = w['mmr'], True
+                    # Giant Slayer Bonus
                     bonus = min((max(opp_mmrs) - w['mmr']) * 0.2, 80) if w['mmr'] < 1349 and (max(opp_mmrs) - w['mmr']) > 300 else 0
                     w['mmr'] += (40 + bonus); w['wins'] += 1; w['s_w'] += 1; w['peak'] = max(w['peak'], w['mmr']); w['win_streak'] += 1
                     w['t_opp'] += (sum(opp_mmrs) / 2); w['t_p_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
@@ -137,39 +165,43 @@ class FaduMMREngine:
 # ==========================================
 # 🎨 UI & DASHBOARD
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v8.0", layout="wide")
-if 'logs' not in st.session_state: st.session_state.logs = ""
+st.set_page_config(page_title="Fadu MMR Engine v9.0", layout="wide")
 
 with st.sidebar:
-    st.title("🏸 Fadu League Ops")
+    st.title("🏸 Fadu Ops")
     if BRIDGE_URL != "NOT_CONFIGURED": st.success("Registry: 🟢 Online")
     else: st.error("Registry: 🔴 Offline")
-    if GROQ_API_KEY != "NOT_CONFIGURED": st.success("Groq AI: 🟢 Ready")
+    if GROQ_API_KEY != "NOT_CONFIGURED": st.success("Groq AI Auditor: 🟢 Online")
     else: st.error("Groq AI: 🔴 No Key")
-    st.divider(); st.caption("v8.0 | Full Feature Architecture")
+    st.divider(); st.caption("v9.0 | Validator Protocol")
 
 st.title("🏸 Fadu Badminton Power Rankings")
-input_area = st.text_area("Match Logs Input:", value=st.session_state.logs, height=300)
+input_area = st.text_area("Match Logs Input:", height=300, placeholder="20-Feb\nGame 1: W: VJ, Pacs | L: Jersh, Kenmore")
 
 c1, c2, c3 = st.columns([1, 1, 4])
 with c1:
-    if st.button("✨ AI Sanitize", type="secondary", use_container_width=True):
-        with st.spinner("AI thinking..."):
-            st.session_state.logs = ai_sanitize_logs(input_area); st.rerun()
+    if st.button("🔍 AI Audit Logs", type="secondary", use_container_width=True):
+        if not input_area: st.warning("Please paste logs first.")
+        else:
+            with st.spinner("AI scanning for issues..."):
+                report = ai_audit_logs(input_area)
+                st.info(f"### 📋 Audit Report\n{report}")
 
 with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
-        with st.spinner("Analyzing..."):
-            engine = FaduMMREngine(ELITE_START)
-            leaderboard = engine.simulate(input_area)
-            st.session_state.lb = leaderboard
-            if BRIDGE_URL != "NOT_CONFIGURED":
-                requests.post(BRIDGE_URL, json={"target": "Registry", "headers": leaderboard.columns.tolist(), "values": leaderboard.values.tolist()})
-                st.toast("Registry Synced!")
+        if not input_area: st.warning("No logs to process.")
+        else:
+            with st.spinner("Analyzing performance..."):
+                engine = FaduMMREngine(ELITE_START)
+                leaderboard = engine.simulate(input_area)
+                st.session_state.lb = leaderboard
+                if BRIDGE_URL != "NOT_CONFIGURED":
+                    requests.post(BRIDGE_URL, json={"target": "Registry", "headers": leaderboard.columns.tolist(), "values": leaderboard.values.tolist()})
+                    st.toast("Registry Synced!")
 
 if 'lb' in st.session_state:
     st.divider()
-    search = st.text_input("🔍 Search Player:", placeholder="Type a name to filter the table...")
-    display_df = st.session_state.lb
-    if search: display_df = display_df[display_df['Player'].str.contains(search, case=False)]
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    search = st.text_input("🔍 Search Player:", placeholder="Filter ranking table...")
+    df = st.session_state.lb
+    if search: df = df[df['Player'].str.contains(search, case=False)]
+    st.dataframe(df, use_container_width=True, hide_index=True)
