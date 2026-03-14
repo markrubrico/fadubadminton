@@ -195,7 +195,7 @@ class FaduMMREngineV43:
                 "Tier": self.get_tier(p['mmr']), 
                 "MMR": round(p['mmr']),
                 "Peak": round(p['peak']), 
-                "+/-": round(p['mmr'] - p['mmr_start_of_session']) if p['active_this_session'] else 0,
+                "Plus/Minus": round(p['mmr'] - p['mmr_start_of_session']) if p['active_this_session'] else 0,
                 "Avg Opponent MMR": aod, 
                 "Avg Partner Delta": apd,
                 "Status": "Elite" if p['mmr'] >= elite_thresh else "Stable",
