@@ -8,73 +8,63 @@ from datetime import datetime
 import time
 
 # ==========================================
-# ⚙️ LEAGUE CONFIGURATION & HEADSTARTS
+# ⚙️ LEAGUE CONFIGURATION
 # ==========================================
+# VETERANS: Start at 1500 MMR. Everyone else starts at 1000.
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
     "Kent", "Ivan", "Efren", "Jayson", "Allen", "Bombi", "AJ"
 ]
 
 TIERS = {
-    "Mythical Glory": 2750,
-    "Mythic": 2300,
-    "Legend": 1900,
-    "Epic": 1650,
-    "Grandmaster": 1350,
-    "Master": 0
+    "Mythical Glory": 2750, "Mythic": 2300, "Legend": 1900,
+    "Epic": 1650, "Grandmaster": 1350, "Master": 0
 }
 
 try:
     BRIDGE_URL = st.secrets["BRIDGE_URL"]
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-except Exception:
+except:
     BRIDGE_URL = "NOT_CONFIGURED"
     GEMINI_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# 🎨 CUSTOM UI STYLING
-# ==========================================
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fb; }
-    .stDataFrame { border: 1px solid #e6e9ef; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-    div[data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #e6e9ef; padding: 15px; border-radius: 12px; }
-    h1, h2, h3 { color: #1e293b; font-weight: 700; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# ==========================================
-# ✨ ADVANCED AI SANITIZER (REST API)
+# ✨ AI SANITIZER (TRIPLE-FALLBACK SYSTEM)
 # ==========================================
 def ai_sanitize_logs(raw_input):
     if GEMINI_API_KEY == "NOT_CONFIGURED":
         return "ERROR: Missing API Key in Secrets."
     
-    # Path corrected to v1beta/models/gemini-1.5-flash
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # We try 3 different endpoints because Google is inconsistent with Flash
+    endpoints = [
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+    ]
     
     prompt = f"""
-    You are a Master Data Parser for the Fadu Badminton League. 
-    Transform messy logs to: 'Game X: W: P1, P2 | L: P3, P4'
-    Logic: Identify winners/losers from context. Map names to: {ELITE_START}. 
-    Keep Date Headers (e.g. 20-Feb). Return ONLY cleaned logs.
+    You are the Data Architect for Fadu Badminton. 
+    TASK: Convert messy logs to 'Game X: W: P1, P2 | L: P3, P4'.
+    RULES: 1. Identify winners/losers from context. 2. Map names to: {ELITE_START}. 
+    3. Keep Date Headers. 4. Return ONLY cleaned logs.
     INPUT: {raw_input}
     """
     
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    headers = {'Content-Type': 'application/json'}
     
-    try:
-        response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=25)
-        res_json = response.json()
-        if "candidates" in res_json:
-            return res_json['candidates'][0]['content']['parts'][0]['text'].strip()
-        return f"AI Error: {res_json.get('error', {}).get('message', 'Check key permissions.')}"
-    except Exception as e:
-        return f"Request Error: {str(e)}"
+    for url in endpoints:
+        try:
+            response = requests.post(url, json=payload, timeout=20)
+            if response.status_code == 200:
+                res_json = response.json()
+                return res_json['candidates'][0]['content']['parts'][0]['text'].strip()
+        except:
+            continue
+            
+    return "AI Error: All connection attempts failed. Please check your API key permissions in Google AI Studio."
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v4.5 (FULL ARCHITECTURE)
+# 🧠 DYNAMIC MMR ENGINE v5.0
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -82,167 +72,122 @@ class FaduMMREngine:
         self.players = {}
 
     def get_player(self, name):
-        """Builds roster dynamically from logs."""
         n_clean = name.strip()
         n_lower = n_clean.lower()
         if n_lower not in self.players:
-            start_mmr = 1500 if n_lower in self.elite_list else 1000
+            start = 1500 if n_lower in self.elite_list else 1000
             self.players[n_lower] = {
-                'display_name': n_clean, 'mmr': start_mmr, 'peak': start_mmr, 'wins': 0, 'losses': 0,
-                'total_opp_mmr': 0, 'total_partner_mmr_delta': 0, 'mmr_start_of_session': start_mmr, 
-                'session_w': 0, 'session_l': 0, 'last_session_idx': -1, 'is_new_to_league': True, 
-                'active_this_session': False, 'win_streak': 0
+                'display_name': n_clean, 'mmr': start, 'peak': start, 'wins': 0, 'losses': 0,
+                'total_opp_mmr': 0, 'total_partner_mmr_delta': 0, 'mmr_start': start, 
+                'session_w': 0, 'session_l': 0, 'last_idx': -1, 'active': False, 'streak': 0
             }
         return n_lower
 
-    def get_tier(self, mmr):
-        for tier, threshold in TIERS.items():
-            if mmr >= threshold: return tier
-        return "Master"
+    def generate_remark(self, p, apd, aod, thresh, rank):
+        if p.get('last_idx') == -1 and p['active']: return "Rookie debut."
+        if rank == 1: return "The Final Boss."
+        if p['streak'] >= 3: return f"On Fire ({p['streak']} wins)!"
+        if apd < -250: return "The Anchor."
+        if aod > 1650: return "Iron Man."
+        return "Pure Hustle."
 
-    def generate_power_remark(self, p, apd, aod, elite_thresh, rank):
-        """Full 7-branch Logic from Ops Manual."""
-        if p.get('is_new_to_league', False) and p['active_this_session']:
-            return f"Welcome! Rookie debut with {p['session_w']}-{p['session_l']} record."
-        if rank == 1: return "The Final Boss. Absolute League Dominance."
-        if p['win_streak'] >= 3: return f"On Fire! {p['win_streak']} Game Win Streak."
-        if apd < -250: return "The Anchor. Carrying the partnership weight."
-        if aod > 1650: return "Iron Man. Battling the league heavyweights."
-        if p['session_l'] >= 3: return "Rough Night. The grind continues."
-        return "Pure Hustle. A consistent force."
-
-    def simulate(self, raw_log_text):
-        structured_logs = self.parse_raw_logs(raw_log_text)
-        if not structured_logs: return pd.DataFrame()
-        all_dates = list(dict.fromkeys([l['date'] for l in structured_logs]))
-        last_session_idx = len(all_dates) - 1
-
-        for session_idx, date in enumerate(all_dates):
-            is_last = (session_idx == last_session_idx)
-            session_games = [g for g in structured_logs if g['date'] == date]
-            for p in self.players.values(): p['active_this_session'], p['session_w'], p['session_l'] = False, 0, 0
-
-            for game in session_games:
-                win_keys = [self.get_player(n) for n in game['W']]
-                lose_keys = [self.get_player(n) for n in game['L']]
-                active_mmrs = [p['mmr'] for p in self.players.values()]
-                elite_thresh = np.percentile(active_mmrs, 80) if active_mmrs else 1500
-
-                # Winners
-                for i, wk in enumerate(win_keys):
-                    w = self.players[wk]
-                    if not w['active_this_session']: w['mmr_start_of_session'], w['active_this_session'] = w['mmr'], True
-                    eff = 0 if (session_idx - w['last_session_idx'] >= 4) else (w['wins'] + w['losses'])
-                    lam = 0.40 if eff <= 5 else 0.25 if eff <= 15 else 0.15
-                    h_opp = max([self.players[lk]['mmr'] for lk in lose_keys]) if lose_keys else 1000
-                    bonus = min((h_opp - w['mmr']) * lam, 80) if w['mmr'] < 1349 and (h_opp - w['mmr']) >= 300 else 0
-                    w['mmr'] += (40 + bonus); w['wins'] += 1; w['session_w'] += 1; w['win_streak'] += 1; w['peak'] = max(w['peak'], w['mmr'])
-                    w['total_opp_mmr'] += (sum([self.players[lk]['mmr'] for lk in lose_keys]) / 2)
-                    w['total_partner_mmr_delta'] += (self.players[win_keys[1-i]]['mmr'] - w['mmr'])
-
-                # Losers (Guardian Shield)
-                for i, lk in enumerate(lose_keys):
-                    l = self.players[lk]; partner = self.players[lose_keys[1-i]]
-                    if not l['active_this_session']: l['mmr_start_of_session'], l['active_this_session'] = l['mmr'], True
-                    loss = 10 if (l['wins'] + l['losses']) < 5 else 20
-                    gap = l['mmr'] - partner['mmr']
-                    if (l['mmr'] >= elite_thresh and gap >= 150) or (partner['mmr'] >= elite_thresh and (partner['mmr'] - l['mmr']) >= 150): loss = 16
-                    l['mmr'] -= loss; l['losses'] += 1; l['session_l'] += 1; l['win_streak'] = 0
-                    l['total_opp_mmr'] += (sum([self.players[wk]['mmr'] for wk in win_keys]) / 2)
-                    l['total_partner_mmr_delta'] += (partner['mmr'] - l['mmr'])
-
-            if not is_last:
-                for p in self.players.values():
-                    if p['active_this_session']: p['is_new_to_league'], p['last_session_idx'] = False, session_idx
-        return self.generate_leaderboard(elite_thresh if 'elite_thresh' in locals() else 1500)
-
-    def parse_raw_logs(self, text):
+    def simulate(self, text):
         logs = []
         date = "Unknown"
         for line in text.strip().split('\n'):
             line = line.strip()
             if not line or line.startswith('!!'): continue
-            date_match = re.match(r'^(\d{1,2}-[A-Za-z]+)', line)
-            if date_match: date = date_match.group(1)
+            date_m = re.match(r'^(\d{1,2}-[A-Za-z]+)', line)
+            if date_m: date = date_m.group(1)
             elif 'W:' in line:
                 try:
-                    parts = line.split('|')
-                    w = [n.strip() for n in parts[0].split('W:')[1].split(',')]
-                    l = [n.strip() for n in parts[1].split('L:')[1].split(',')]
+                    p = line.split('|')
+                    w = [n.strip() for n in p[0].split('W:')[1].split(',')]
+                    l = [n.strip() for n in p[1].split('L:')[1].split(',')]
                     logs.append({'date': date, 'W': w, 'L': l})
                 except: continue
-        return logs
+        
+        if not logs: return pd.DataFrame()
+        dates = list(dict.fromkeys([l['date'] for l in logs]))
+        
+        for idx, d in enumerate(dates):
+            is_last = (idx == len(dates) - 1)
+            for p in self.players.values(): p['active'], p['session_w'], p['session_l'] = False, 0, 0
+            
+            for g in [x for x in logs if x['date'] == d]:
+                wk = [self.get_player(n) for n in g['W']]
+                lk = [self.get_player(n) for n in g['L']]
+                thresh = np.percentile([p['mmr'] for p in self.players.values()], 80) if self.players else 1500
 
-    def generate_leaderboard(self, elite_thresh):
-        data = []
-        for key, p in self.players.items():
+                for i, k in enumerate(wk):
+                    w = self.players[k]
+                    if not w['active']: w['mmr_start'], w['active'] = w['mmr'], True
+                    bonus = min((max([self.players[x]['mmr'] for x in lk]) - w['mmr']) * 0.25, 80) if w['mmr'] < 1349 else 0
+                    w['mmr'] += (40 + bonus); w['wins'] += 1; w['session_w'] += 1; w['streak'] += 1; w['peak'] = max(w['peak'], w['mmr'])
+                    w['total_opp_mmr'] += (sum([self.players[x]['mmr'] for x in lk]) / 2)
+                    w['total_partner_mmr_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
+
+                for i, k in enumerate(lk):
+                    l = self.players[k]; partner = self.players[lk[1-i]]
+                    if not l['active']: l['mmr_start'], l['active'] = l['mmr'], True
+                    loss = 10 if (l['wins'] + l['losses']) < 5 else 20
+                    gap = l['mmr'] - partner['mmr']
+                    if (l['mmr'] >= thresh and gap >= 150) or (partner['mmr'] >= thresh and (partner['mmr'] - l['mmr']) >= 150): loss = 16
+                    l['mmr'] -= loss; l['losses'] += 1; l['session_l'] += 1; l['streak'] = 0
+                    l['total_opp_mmr'] += (sum([self.players[x]['mmr'] for x in wk]) / 2)
+                    l['total_partner_mmr_delta'] += (partner['mmr'] - l['mmr'])
+
+            if not is_last:
+                for p in self.players.values():
+                    if p['active']: p['last_idx'] = idx
+
+        res = []
+        for k, p in self.players.items():
             total = p['wins'] + p['losses']
             if total == 0: continue
-            aod = round(p['total_opp_mmr'] / total); apd = round(p['total_partner_mmr_delta'] / total)
-            data.append({
-                "Rank": 0, "Player": p['display_name'], "Tier": self.get_tier(p['mmr']), "MMR": round(p['mmr']),
-                "Peak": round(p['peak']), "Session Change": round(p['mmr'] - p['mmr_start_of_session']) if p['active_this_session'] else 0,
-                "Avg Opponent MMR": aod, "Avg Partner Delta": apd, "Status": "Elite" if p['mmr'] >= elite_thresh else "Stable",
-                "Confidence": "⭐⭐⭐" if total > 15 else "⭐⭐" if total > 5 else "⭐",
-                "Record": f"{p['wins']}-{p['losses']}", "Session": f"{p['session_w']}-{p['session_l']}", "w": p['wins']
+            res.append({
+                "Rank": 0, "Player": p['display_name'], "Tier": next(t for t, v in TIERS.items() if p['mmr'] >= v), "MMR": round(p['mmr']),
+                "Peak": round(p['peak']), "Session +/-": round(p['mmr'] - p['mmr_start']) if p['active'] else 0,
+                "Avg Opponent MMR": round(p['total_opp_mmr'] / total), "Avg Partner Delta": round(p['total_partner_mmr_delta'] / total),
+                "Record": f"{p['wins']}-{p['losses']}", "Session": f"{p['session_w']}-{p['session_l']}", "w": p['wins'], "key": k
             })
-        df = pd.DataFrame(data).sort_values(by=["MMR", "w"], ascending=False)
+        
+        df = pd.DataFrame(res).sort_values(by=["MMR", "w"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
-        df["Power Remarks"] = df.apply(lambda row: self.generate_power_remark(self.players[row['Player'].lower()], row['Avg Partner Delta'], row['Avg Opponent MMR'], elite_thresh, row['Rank']), axis=1)
-        return df.drop(columns=['w'])
+        df["Power Remarks"] = df.apply(lambda r: self.generate_remark(self.players[r['key']], r['Avg Partner Delta'], r['Avg Opponent MMR'], thresh, r['Rank']), axis=1)
+        return df.drop(columns=['w', 'key'])
 
 # ==========================================
-# 📊 STREAMLIT INTERFACE
+# 🎨 UI
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v1.8", layout="wide", page_icon="🏸")
-if 'cleaned_logs_state' not in st.session_state: st.session_state.cleaned_logs_state = ""
+st.set_page_config(page_title="Fadu MMR v2.0", layout="wide")
+if 'logs' not in st.session_state: st.session_state.logs = ""
 
 with st.sidebar:
-    st.title("Fadu League Ops")
-    # Corrected Sidebar Logic (Properly formatted)
-    if BRIDGE_URL != "NOT_CONFIGURED":
-        st.success("Sheets: 🟢 Online")
-    else:
-        st.error("Sheets: 🔴 Offline")
-        
+    st.title("🏸 Fadu Ops")
+    if BRIDGE_URL != "NOT_CONFIGURED": st.success("Registry: 🟢")
+    else: st.error("Registry: 🔴")
+    
     if GEMINI_API_KEY != "NOT_CONFIGURED":
-        try:
-            r = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash?key={GEMINI_API_KEY}", timeout=5)
-            if r.status_code == 200:
-                st.success("AI: 🟢 READY")
-            else:
-                st.error(f"AI: 🟡 Error {r.status_code}")
-        except Exception:
-            st.error("AI: 🔴 Offline")
-    else:
-        st.error("AI: 🔴 Missing Key")
-        
-    st.info("**Brackets**\nMythic Glory: 2750+\nMythic: 2300\nLegend: 1900\nEpic: 1650\nGM: 1350")
+        st.success("AI: 🟢 READY")
+    else: st.error("AI: 🔴 NO KEY")
 
 st.title("🏸 Fadu Badminton Power Rankings")
-input_logs = st.text_area("Paste Raw Match Logs:", value=st.session_state.cleaned_logs_state, height=350)
+logs_in = st.text_area("Logs:", value=st.session_state.logs, height=300)
 
-c1, c2, _ = st.columns([1.5, 1.5, 4])
+c1, c2 = st.columns([1, 1])
 with c1:
-    if st.button("✨ AI Sanitize Logs", type="secondary", use_container_width=True):
-        if not input_logs: st.warning("Paste logs first.")
-        else:
-            with st.spinner("AI Parsing..."):
-                st.session_state.cleaned_logs_state = ai_sanitize_logs(input_logs)
-                st.rerun()
+    if st.button("✨ AI Sanitize", use_container_width=True):
+        with st.spinner("AI Parsing..."):
+            st.session_state.logs = ai_sanitize_logs(logs_in)
+            st.rerun()
 
 with c2:
-    if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
-        if not input_logs: st.warning("No logs.")
-        else:
-            with st.spinner("Calculating..."):
-                try:
-                    engine = FaduMMREngine(ELITE_START)
-                    res = engine.simulate(input_logs)
-                    st.dataframe(res, use_container_width=True, hide_index=True)
-                    if BRIDGE_URL != "NOT_CONFIGURED":
-                        requests.post(BRIDGE_URL, json={"target": "Registry", "headers": res.columns.tolist(), "values": res.values.tolist()})
-                        st.success("Synced to Sheets!")
-                except Exception as e:
-                    st.error(f"Engine Error: {str(e)}")
-st.caption(f"v1.8 | {datetime.now().strftime('%Y-%m-%d')}")
+    if st.button("🚀 Calculate & Sync", use_container_width=True):
+        with st.spinner("Processing..."):
+            engine = FaduMMREngine(ELITE_START)
+            res = engine.simulate(logs_in)
+            st.dataframe(res, use_container_width=True, hide_index=True)
+            if BRIDGE_URL != "NOT_CONFIGURED":
+                requests.post(BRIDGE_URL, json={"target": "Registry", "headers": res.columns.tolist(), "values": res.values.tolist()})
+                st.success("Synced!")
