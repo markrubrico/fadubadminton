@@ -157,7 +157,8 @@ class FaduMMREngine:
                 "+/-": round(p['mmr'] - p['mmr_s']) if p['active'] else 0, 
                 "AOD": aod, "APD": apd, "Status": "Elite" if p['mmr'] >= thresh else "Stable", 
                 "Confidence": "⭐⭐⭐" if tot > 15 else "⭐⭐" if tot > 5 else "⭐", 
-                "Last Session": f"{p['s_w']}-{p['s_l']}", "Season Record": f"{p['wins']}-{p['losses']}", 
+                "Last Session": str(f"{p['s_w']}-{p['s_l']}"), 
+                "Season Record": str(f"{p['wins']}-{p['losses']}"),
                 "Remarks": "", "w_sort": p['wins'], "key": p['name'].lower()
             })
         
