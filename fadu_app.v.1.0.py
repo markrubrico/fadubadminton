@@ -5,72 +5,70 @@ import re
 import requests
 import json
 from datetime import datetime
-from google import genai  # Official 2026 SDK
 
 # ==========================================
 # ⚙️ CONFIGURATION & SEEDING
 # ==========================================
-# Veterans receive a starting seed of 1500 MMR.
-# New players discovered in logs start at 1000 MMR.
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
     "Kent", "Ivan", "Efren", "Jayson", "Allen", "Bombi", "AJ"
 ]
 
 TIERS = {
-    "Mythical Glory": 2750,
-    "Mythic": 2300,
-    "Legend": 1900,
-    "Epic": 1650,
-    "Grandmaster": 1350,
-    "Master": 0
+    "Mythical Glory": 2750, "Mythic": 2300, "Legend": 1900,
+    "Epic": 1650, "Grandmaster": 1350, "Master": 0
 }
 
-# Load Secrets from Streamlit
+# Load Secrets (Update your Streamlit Secrets to include GROQ_API_KEY)
 try:
     BRIDGE_URL = st.secrets["BRIDGE_URL"]
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"] 
 except Exception:
     BRIDGE_URL = "NOT_CONFIGURED"
-    GEMINI_API_KEY = "NOT_CONFIGURED"
+    GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# ✨ AI SANITIZER (GEMINI 2.0 FLASH - FREE TIER)
+# ✨ AI SANITIZER (GROQ + LLAMA 3.3)
 # ==========================================
 def ai_sanitize_logs(raw_input):
-    if GEMINI_API_KEY == "NOT_CONFIGURED":
-        return "ERROR: Missing API Key in Secrets."
+    if GROQ_API_KEY == "NOT_CONFIGURED":
+        return "ERROR: Missing GROQ_API_KEY in Streamlit Secrets."
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    prompt = f"""
+    You are the Data Architect for the Fadu Badminton League.
+    TASK: Convert messy, conversational logs into programmatic W/L format.
+    
+    STRICT RULES:
+    1. OUTPUT FORMAT: 'Game X: W: P1, P2 | L: P3, P4'
+    2. LOGIC: Reconcile all names and fix typos.
+    3. DATES: Keep lines like '20-Feb' exactly as they are.
+    4. NO CONVERSATION: Return ONLY the cleaned logs.
+    
+    INPUT:
+    {raw_input}
+    """
+    
+    data = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.1
+    }
     
     try:
-        # Initialize Client
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        
-        prompt = f"""
-        You are the Master Data Parser for the Fadu Badminton League.
-        TASK: Convert messy, conversational logs into programmatic W/L format.
-        
-        RULES:
-        1. OUTPUT FORMAT: 'Game X: W: P1, P2 | L: P3, P4'
-        2. LOGIC: Reconcile all names and fix typos based on common sense.
-        3. DATES: Keep lines like '20-Feb' exactly as they are.
-        4. NO CHAT: Return ONLY the cleaned logs.
-        
-        INPUT:
-        {raw_input}
-        """
-        
-        # Switched to 'gemini-2.0-flash' which is the stable 2026 Free Tier model
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-            config={"temperature": 0.1}
-        )
-        return response.text.strip()
+        response = requests.post(url, headers=headers, json=data, timeout=15)
+        res_json = response.json()
+        return res_json['choices'][0]['message']['content'].strip()
     except Exception as e:
-        return f"AI Error: {str(e)}"
+        return f"Groq AI Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v5.1 (FULL LOGIC)
+# 🧠 DYNAMIC MMR ENGINE v5.2 (FULL LOGIC)
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -124,8 +122,7 @@ class FaduMMREngine:
             for g in [x for x in logs if x['date'] == d]:
                 wk = [self.get_player(n) for n in g['W']]
                 lk = [self.get_player(n) for n in g['L']]
-                active_mmrs = [p['mmr'] for p in self.players.values()]
-                thresh = np.percentile(active_mmrs, 80) if active_mmrs else 1500
+                thresh = np.percentile([p['mmr'] for p in self.players.values()], 80) if self.players else 1500
 
                 for i, k in enumerate(wk):
                     w = self.players[k]
@@ -154,13 +151,12 @@ class FaduMMREngine:
         for k, p in self.players.items():
             total = p['wins'] + p['losses']
             if total == 0: continue
-            aod = round(p['total_opp_mmr'] / total)
-            apd = round(p['total_partner_mmr_delta'] / total)
             res.append({
                 "Rank": 0, "Player": p['display_name'], 
                 "Tier": next(t for t, v in TIERS.items() if p['mmr'] >= v), "MMR": round(p['mmr']),
                 "Peak": round(p['peak']), "Session +/-": round(p['mmr'] - p['mmr_start']) if p['active'] else 0,
-                "Avg Opponent MMR": aod, "Avg Partner Delta": apd,
+                "Avg Opponent MMR": round(p['total_opp_mmr'] / total), 
+                "Avg Partner Delta": round(p['total_partner_mmr_delta'] / total),
                 "Record": f"{p['wins']}-{p['losses']}", "Session": f"{p['session_w']}-{p['session_l']}", "w": p['wins'], "key": k
             })
         
@@ -170,25 +166,25 @@ class FaduMMREngine:
         return df.drop(columns=['w', 'key'])
 
 # ==========================================
-# 🎨 STREAMLIT DASHBOARD UI
+# 📊 STREAMLIT UI
 # ==========================================
-st.set_page_config(page_title="Fadu MMR v4.0", layout="wide", page_icon="🏸")
+st.set_page_config(page_title="Fadu MMR v5.0", layout="wide", page_icon="🏸")
 if 'logs' not in st.session_state: st.session_state.logs = ""
 
 with st.sidebar:
     st.title("🏸 Fadu Ops")
-    st.success("Sheets: 🟢 Online") if BRIDGE_URL != "NOT_CONFIGURED" else st.error("Sheets: 🔴 Offline")
-    st.success("Gemini 2.0 Flash: 🟢 Connected") if GEMINI_API_KEY != "NOT_CONFIGURED" else st.error("AI: 🔴 No Key")
+    st.success("Sheets Registry: 🟢") if BRIDGE_URL != "NOT_CONFIGURED" else st.error("Sheets Registry: 🔴")
+    st.success("Groq Llama 3: 🟢") if GROQ_API_KEY != "NOT_CONFIGURED" else st.error("Groq AI: 🔴 No Key")
     st.divider()
-    st.caption("v4.0 | March 2026 Free Tier")
+    st.caption("v5.0 | Groq Optimization")
 
 st.title("🏸 Fadu Badminton Power Rankings")
 input_area = st.text_area("Match Logs Input:", value=st.session_state.logs, height=350)
 
-c1, c2, _ = st.columns([1, 1, 4])
+c1, c2, _ = st.columns([1.5, 1.5, 4])
 with c1:
     if st.button("✨ AI Sanitize", type="secondary", use_container_width=True):
-        with st.spinner("AI thinking..."):
+        with st.spinner("Groq AI thinking..."):
             st.session_state.logs = ai_sanitize_logs(input_area)
             st.rerun()
 
@@ -200,4 +196,4 @@ with c2:
             st.dataframe(leaderboard, use_container_width=True, hide_index=True)
             if BRIDGE_URL != "NOT_CONFIGURED":
                 requests.post(BRIDGE_URL, json={"target": "Registry", "headers": leaderboard.columns.tolist(), "values": leaderboard.values.tolist()})
-                st.success("Synced to Sheets Registry!")
+                st.success("Synced to Sheets!")
