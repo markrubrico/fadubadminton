@@ -30,7 +30,8 @@ def ai_sanitize_logs(raw_input, roster):
         return "ERROR: Please configure GEMINI_API_KEY in Streamlit Secrets."
     
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
+        # transport='rest' is the key fix for the 404 error you saw
+        genai.configure(api_key=GEMINI_API_KEY, transport='rest')
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         prompt = f"""
@@ -46,11 +47,7 @@ def ai_sanitize_logs(raw_input, roster):
         2. FOOLPROOF MAPPING: Even if the input is a sentence like 'Kim, Lea vs Fadu, Mitch: WINNER - FADU, MITCH', you MUST identify that Fadu/Mitch are winners and Kim/Lea are losers.
         3. ROSTER MATCHING: Map every name to the Official Roster. Fix typos (e.g., 'Knt' -> 'Kent').
         4. DATE HEADERS: Keep lines like '20-Feb' or '07-Mar' exactly as they are.
-        5. NO CONVERSATION: Do not say 'Here are the logs' or 'I fixed them'. Return ONLY the cleaned data.
-        
-        EXAMPLE TRANSFORMATION:
-        Input: 'Game 16: Kim, Lea vsv Fadu, Mitch: WINNER - FADU, MITCH'
-        Output: 'Game 16: W: Fadu, Mitch | L: Kim, Lea'
+        5. NO CONVERSATION: Return ONLY the cleaned data.
         
         INPUT TO PROCESS:
         {raw_input}
@@ -203,8 +200,6 @@ class FaduMMREngineV43:
 # ==========================================
 # 🎨 STREAMLIT INTERFACE
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v1.1", layout="wide", page_icon="🏸")
-
 st.set_page_config(page_title="Fadu MMR Engine v1.1", layout="wide", page_icon="🏸")
 
 # --- REPLACE YOUR SIDEBAR SECTION WITH THIS ---
