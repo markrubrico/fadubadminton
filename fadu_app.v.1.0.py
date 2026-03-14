@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 
 # ==========================================
-# ⚙️ LEAGUE CONFIGURATION
+# ⚙️ LEAGUE CONFIGURATION & SEEDING
 # ==========================================
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
@@ -23,15 +23,16 @@ try:
     BRIDGE_URL = st.secrets["BRIDGE_URL"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except:
-    BRIDGE_URL = "NOT_CONFIGURED"; GROQ_API_KEY = "NOT_CONFIGURED"
+    BRIDGE_URL = "NOT_CONFIGURED"
+    GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# 🔍 AI AUDITOR (FOCUSED ON ACTIVE DATE)
+# 🔍 AI AUDITOR (GROQ LLAMA 3.3)
 # ==========================================
 def ai_audit_logs(raw_input):
     if GROQ_API_KEY == "NOT_CONFIGURED": return "ERROR: Missing GROQ_API_KEY."
     
-    # Extract only the last date block for the AI to focus on
+    # Isolate only the final block of data
     blocks = raw_input.strip().split('\n\n')
     active_session = blocks[-1] if blocks else raw_input
 
@@ -40,22 +41,18 @@ def ai_audit_logs(raw_input):
     
     prompt = f"""
     You are the Auditor for the Fadu Badminton League. 
-    Review ONLY this most recent session and list specific concerns.
+    Review ONLY the active session and list concerns by Game Number.
     
     CHECK FOR:
-    1. Games with missing players (must have 2 winners, 2 losers).
+    1. Missing players (must have 2 winners, 2 losers).
     2. Unknown names not in the roster: {ELITE_START}.
     
-    FORMAT: 
-    - [Game X]: [Reason]
-    
-    If this specific session looks perfect, say 'Active Session Verified: No issues found.'
-    DO NOT review historical games.
+    FORMAT: [Game X]: [Reason]
     """
     
     payload = {
         "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": f"{prompt}\n\nACTIVE SESSION DATA:\n{active_session}"}],
+        "messages": [{"role": "user", "content": f"{prompt}\n\nACTIVE DATA:\n{active_session}"}],
         "temperature": 0.0
     }
     
@@ -65,7 +62,7 @@ def ai_audit_logs(raw_input):
     except Exception as e: return f"Audit Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v9.1
+# 🧠 DYNAMIC MMR ENGINE v9.2
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -94,6 +91,7 @@ class FaduMMREngine:
         if p['win_streak'] >= 3: return f"Heat Check! {p['win_streak']} Win Streak."
         if apd < -250: return "Elite Anchor. Carrying the partnership."
         if aod > 1700: return "Iron Man. Battling the heavyweights."
+        if p['s_l'] >= 3: return "Rough Night. The grind continues."
         return "Pure Hustle. A consistent force."
 
     def simulate(self, text):
@@ -121,7 +119,7 @@ class FaduMMREngine:
             for g in [x for x in logs if x['date'] == d]:
                 wk = [self.get_player(n, idx, num_dates) for n in g['W']]
                 lk = [self.get_player(n, idx, num_dates) for n in g['L']]
-                cur_mmrs = [p['mmr'] for p in self.players.values()]; thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
+                mmrs = [p['mmr'] for p in self.players.values()]; thresh = np.percentile(mmrs, 80) if mmrs else 1500
 
                 for i, k in enumerate(wk):
                     w = self.players[k]; opp_mmrs = [self.players[lx]['mmr'] for lx in lk]
@@ -160,13 +158,26 @@ class FaduMMREngine:
 # ==========================================
 # 🎨 UI & DASHBOARD
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v9.1", layout="wide")
+st.set_page_config(page_title="Fadu MMR Engine v9.2", layout="wide")
 
+# Sidebar Logic - CLEAN & SECURE
 with st.sidebar:
     st.title("🏸 Fadu Ops")
-    st.success("Sheets: 🟢") if BRIDGE_URL != "NOT_CONFIGURED" else st.error("Sheets: 🔴")
-    st.success("AI Auditor: 🟢") if GROQ_API_KEY != "NOT_CONFIGURED" else st.error("AI Auditor: 🔴")
-    st.divider(); st.caption("v9.1 | Isolated Audit")
+    
+    # Registry Connection Status
+    if BRIDGE_URL != "NOT_CONFIGURED":
+        st.success("Sheets Registry: 🟢 Online")
+    else:
+        st.error("Sheets Registry: 🔴 Offline")
+    
+    # AI Auditor Status
+    if GROQ_API_KEY != "NOT_CONFIGURED":
+        st.success("AI Auditor: 🟢 Online")
+    else:
+        st.error("AI Auditor: 🔴 No Key")
+        
+    st.divider()
+    st.caption("v9.2 | Ironclad Architecture")
 
 st.title("🏸 Fadu Badminton Power Rankings")
 input_area = st.text_area("Match Logs Input:", height=300)
@@ -174,22 +185,22 @@ input_area = st.text_area("Match Logs Input:", height=300)
 c1, c2, _ = st.columns([1, 1, 4])
 with c1:
     if st.button("🔍 AI Audit Logs", type="secondary", use_container_width=True):
-        if not input_area: st.warning("Paste logs first.")
+        if not input_area: st.warning("Please paste logs first.")
         else:
-            with st.spinner("Auditing active session..."):
-                report = ai_audit_logs(input_area)
-                st.session_state.audit_report = report
+            with st.spinner("AI Auditor scanning active session..."):
+                st.session_state.audit_report = ai_audit_logs(input_area)
 
-# Render Audit Report in a Wide Container
 if 'audit_report' in st.session_state:
     st.info(f"### 📋 Active Session Audit\n{st.session_state.audit_report}")
-    if st.button("Clear Audit"): del st.session_state.audit_report; st.rerun()
+    if st.button("Close Audit Report"):
+        del st.session_state.audit_report
+        st.rerun()
 
 with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
         if not input_area: st.warning("No logs to process.")
         else:
-            with st.spinner("Analyzing performance..."):
+            with st.spinner("Analyzing..."):
                 engine = FaduMMREngine(ELITE_START)
                 st.session_state.lb = engine.simulate(input_area)
                 if BRIDGE_URL != "NOT_CONFIGURED":
@@ -198,7 +209,8 @@ with c2:
 
 if 'lb' in st.session_state:
     st.divider()
-    search = st.text_input("🔍 Search Player:", placeholder="Filter by name...")
+    search = st.text_input("🔍 Search Player:", placeholder="Filter ranking table by name...")
     df = st.session_state.lb
-    if search: df = df[df['Player'].str.contains(search, case=False)]
+    if search:
+        df = df[df['Player'].str.contains(search, case=False)]
     st.dataframe(df, use_container_width=True, hide_index=True)
