@@ -6,7 +6,7 @@ import requests
 import json
 
 # ==========================================
-# ⚙️ CONFIGURATION & SEEDING (COMPLIANT)
+# ⚙️ LEAGUE CONFIGURATION & SEEDING
 # ==========================================
 ELITE_START = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", "VJ", "Luke", 
@@ -21,12 +21,12 @@ TIERS = [
 try:
     BRIDGE_URL = st.secrets["BRIDGE_URL"]
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except:
+except Exception:
     BRIDGE_URL = "NOT_CONFIGURED"
     GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# 🔍 AI AUDITOR (DUPE, TYPO & DEBUT HUNTER)
+# 🔍 AI AUDITOR (ANTI-DUPE & TYPO HUNTER)
 # ==========================================
 def ai_audit_session(raw_input, established_players):
     if GROQ_API_KEY == "NOT_CONFIGURED": return "ERROR: Missing GROQ_API_KEY."
@@ -63,7 +63,7 @@ def ai_audit_session(raw_input, established_players):
     except Exception as e: return f"Audit Error: {str(e)}"
 
 # ==========================================
-# 🧠 MMR ENGINE (FULL 13-COLUMN ARCHITECTURE)
+# 🧠 MMR ENGINE (FULL 13-COLUMN OPS MANUAL)
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -96,7 +96,6 @@ class FaduMMREngine:
         return "Pure Hustle. A consistent force."
 
     def simulate(self, text):
-        # Crash-Proof Guard for Empty Input
         if not text.strip(): return pd.DataFrame(), "None", sorted(list(set(self.elite_list)))
         
         logs = []; cur_date = "Unknown"
@@ -126,7 +125,7 @@ class FaduMMREngine:
                 
                 cur_mmrs = [p['mmr'] for p in self.players.values()]; thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
 
-                # Winners (Giant Slayer Logic Included)
+                # Winners (Giant Slayer Logic)
                 for i, k in enumerate(wk):
                     w = self.players[k]; opp_mmrs = [self.players[lx]['mmr'] for lx in lk]
                     if not w['active']: w['mmr_s'], w['active'] = w['mmr'], True
@@ -134,7 +133,7 @@ class FaduMMREngine:
                     w['mmr'] += (40 + bonus); w['wins'] += 1; w['s_w'] += 1; w['peak'] = max(w['peak'], w['mmr']); w['win_streak'] += 1
                     w['t_opp'] += (sum(opp_mmrs) / 2); w['t_p_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
 
-                # Losers (Guardian & Rookie Shield Included)
+                # Losers (Guardian Shields)
                 for i, k in enumerate(lk):
                     l = self.players[k]; partner = self.players[lk[1-i]]; win_mmrs = [self.players[wx]['mmr'] for wx in wk]
                     if not l['active']: l['mmr_s'], l['active'] = l['mmr'], True
@@ -164,13 +163,13 @@ class FaduMMREngine:
         return df.drop(columns=['w_sort', 'key']), last_date, sorted(list(established_names))
 
 # ==========================================
-# 🎨 UI & DASHBOARD (WIDESCREEN)
+# 🎨 UI & DASHBOARD
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v10.2.2", layout="wide")
+st.set_page_config(page_title="Fadu MMR Engine v10.2.3", layout="wide")
 
 with st.sidebar:
     st.title("🏸 Fadu Ops")
-    # Clean Sidebar Logic (Prevents DeltaGenerator Text Leaks)
+    # Ironclad Sidebar Logic
     if BRIDGE_URL != "NOT_CONFIGURED":
         st.success("Sheets Registry: 🟢 Online")
     else:
@@ -179,10 +178,10 @@ with st.sidebar:
         st.success("AI Auditor: 🟢 Online")
     else:
         st.error("AI Auditor: 🔴 No Key")
-    st.divider(); st.caption("v10.2.2 | Ironclad Build")
+    st.divider(); st.caption("v10.2.3 | Registry Restore")
 
 st.title("🏸 Fadu Badminton Power Rankings")
-input_area = st.text_area("Match Logs Input:", height=300, placeholder="Paste your logs here...")
+input_area = st.text_area("Match Logs Input:", height=300)
 
 c1, c2, _ = st.columns([1.5, 1.5, 4])
 with c1:
@@ -202,14 +201,26 @@ with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
         if not input_area.strip(): st.warning("Please paste logs first.")
         else:
-            with st.spinner("Processing..."):
+            with st.spinner("Processing Trajectories & Syncing..."):
                 engine = FaduMMREngine(ELITE_START)
                 lb, last_date, _ = engine.simulate(input_area)
                 st.session_state.lb, st.session_state.last_date = lb, last_date
+                
+                # RE-ENABLED REGISTRY SYNC
                 if BRIDGE_URL != "NOT_CONFIGURED":
-                    resp = requests.post(BRIDGE_URL, json={"target": "Registry", "headers": lb.columns.tolist(), "values": lb.values.tolist()})
-                    if resp.status_code == 200: st.toast(f"✅ Sync Successful: {len(lb)} rows updated.")
-                    else: st.error(f"❌ Sync Failed: {resp.text}")
+                    sync_payload = {
+                        "target": "Registry", 
+                        "headers": lb.columns.tolist(), 
+                        "values": lb.values.tolist()
+                    }
+                    try:
+                        resp = requests.post(BRIDGE_URL, json=sync_payload, timeout=20)
+                        if resp.status_code == 200:
+                            st.toast(f"✅ Registry Sync Successful: {len(lb)} players updated.")
+                        else:
+                            st.error(f"❌ Registry Sync Failed: Status {resp.status_code}")
+                    except Exception as e:
+                        st.error(f"❌ Connection Error: {str(e)}")
 
 if 'lb' in st.session_state:
     st.divider()
