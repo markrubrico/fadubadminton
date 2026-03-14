@@ -5,21 +5,26 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- DASHBOARD CONFIG ---
-st.set_page_config(page_title="Fadu MMR v1.1.0", layout="wide")
+st.set_page_config(page_title="Fadu MMR v1.1.2", layout="wide")
 
+# --- SIDEBAR STATUS ---
 with st.sidebar:
     st.title("🏸 Fadu Ops")
-    # Connection Status
-    if "BRIDGE_URL" in st.secrets: st.success("Registry: 🟢 Online")
-    else: st.error("Registry: 🔴 Offline")
-    if "GROQ_API_KEY" in st.secrets: st.success("Auditor: 🟢 Online")
-    else: st.error("Auditor: 🔴 Offline")
-    
+    if "BRIDGE_URL" in st.secrets:
+        st.success("Registry: 🟢 Online")
+    else:
+        st.error("Registry: 🔴 Offline")
+        
+    if "GROQ_API_KEY" in st.secrets:
+        st.success("Auditor: 🟢 Online")
+    else:
+        st.error("Auditor: 🔴 Offline")
+        
     st.divider()
-    st.caption("v1.1.0 | Rivalry & Tabs Build")
-    st.info("Tip: Head over to the H2H tab after calculating to see player rivalries.")
+    st.caption("v1.1.2 | Rivalry & Matrix Build")
+    st.info("Tip: Head over to the Rivalry tab after calculating to see careers and direct matchups.")
 
-# --- INPUT AREA ---
+# --- MAIN UI ---
 st.title("🏸 Fadu Badminton Power Rankings")
 input_area = st.text_area("Match Logs Input:", height=300, placeholder="Paste your chronological logs here...")
 
@@ -34,6 +39,7 @@ with c1:
         else:
             with st.spinner("Phonetic & Duplicate Check..."):
                 engine = FaduMMREngine()
+                # Initialize engine roster for auditor context
                 _, _, _ = engine.simulate(input_area) 
                 st.session_state.audit_report = ai_audit_session(input_area, list(engine.players.keys()))
 
@@ -53,47 +59,39 @@ with c2:
                 engine = FaduMMREngine()
                 df, last_date, drift = engine.simulate(input_area)
                 
-                # Update Session State for the UI
+                # Persist results in session state for the UI
                 st.session_state.lb = df
                 st.session_state.drift = drift
                 st.session_state.date = last_date
                 
-                # The Handshake Logic
                 if "BRIDGE_URL" in st.secrets:
-                    # We ensure columns are converted to list and data to list-of-lists
                     payload = {
                         "target": "Registry", 
                         "headers": df.columns.tolist(), 
                         "values": df.values.tolist()
                     }
                     try:
-                        resp = requests.post(
-                            st.secrets["BRIDGE_URL"], 
-                            json=payload, 
-                            timeout=20
-                        )
+                        resp = requests.post(st.secrets["BRIDGE_URL"], json=payload, timeout=20)
                         if resp.status_code == 200:
                             st.success(f"🎉 Registry Updated: {resp.text}")
                         else:
-                            st.error(f"❌ Google Script Error: {resp.status_code}")
-                            st.write(resp.text) # This shows the error message from Google
+                            st.error(f"❌ Sync Error: {resp.status_code}")
+                            st.write(resp.text)
                     except Exception as e:
                         st.error(f"❌ Connection Failed: {str(e)}")
-                else:
-                    st.error("Missing BRIDGE_URL in Secrets!")
 
-# --- RESULTS TABS (The New Core) ---
+# --- RESULTS TABS ---
 if 'lb' in st.session_state:
     st.divider()
     
-    tab1, tab2 = st.tabs(["🏆 Leaderboard", "⚔️ Head-to-Head"])
+    tab1, tab2 = st.tabs(["🏆 Leaderboard", "⚔️ Rivalries & Matrix"])
 
     with tab1:
         st.metric("Session Wealth Drift", f"{st.session_state.drift} MMR")
         st.subheader(f"📅 Results for: {st.session_state.date}")
         
         # Player Search Filter
-        search = st.text_input("🔍 Search Player:", placeholder="Type a name to filter the ranking...")
+        search = st.text_input("🔍 Search Player:", placeholder="Type a name to filter the ranking...", key="p_search")
         df_disp = st.session_state.lb
         if search:
             df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
@@ -102,57 +100,39 @@ if 'lb' in st.session_state:
 
     with tab2:
         st.subheader("⚔️ Rivalry Lookup")
-        st.write("Find out who truly dominates the matchup.")
+        st.write("Analyze performance and face-to-face matchups.")
         
         player_list = sorted(st.session_state.lb['Player'].tolist())
         h1, h2 = st.columns(2)
         
         with h1:
-            hero = st.selectbox("Select Player 1:", player_list, key="p1_select")
+            hero = st.selectbox("Select Hero Player:", player_list, key="p1_select")
         with h2:
-            rival = st.selectbox("Select Player 2:", player_list, key="p2_select")
+            rival = st.selectbox("Select Rival Player:", player_list, key="p2_select")
             
-        if st.button("Analyze Rivalry", use_container_width=True):
+        # Action: Direct H2H
+        if st.button("Analyze Direct H2H", use_container_width=True):
             engine = FaduMMREngine()
             h2h = engine.get_h2h(input_area, hero, rival)
             
             if h2h and h2h["matches"]:
                 st.divider()
-                st.write(f"## {hero} vs {rival}")
-                
-                m1, m2, m3 = st.columns(3)
-                total = h2h["p1_wins"] + h2h["p2_wins"]
-                m1.metric(f"{hero} Wins", h2h["p1_wins"])
-                m2.metric("Total Meetings", total)
-                m3.metric(f"{rival} Wins", h2h["p2_wins"])
-                
-                # Victory History Table
+                st.write(f"## {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
                 st.table(pd.DataFrame(h2h["matches"]))
             else:
-                st.warning(f"No matches found in the current logs between {hero} and {rival}.")
-
-
-        # Inside 'with tab2:' in app.py, below the individual H2H section:
-
+                st.warning(f"No direct matches found between {hero} and {rival} in these logs.")
+        
         st.divider()
-        st.subheader(f"📊 {hero}'s Full Opponent Matrix")
-        st.caption("See performance against everyone they've ever faced.")
+        
+        # Action: Career Matrix
+        st.subheader(f"📊 {hero}'s Opponent Matrix")
+        st.caption("A summary of wins/losses against every opponent ever faced.")
         
         if st.button(f"Generate Career Matrix for {hero}", use_container_width=True):
             engine = FaduMMREngine()
             matrix_df = engine.get_rivalry_matrix(input_area, hero)
             
             if matrix_df is not None:
-                # Adding a bit of "Heatmap" styling to make it look professional
-                def color_winrate(val):
-                    pct = int(val.replace('%', ''))
-                    color = 'red' if pct < 40 else 'green' if pct > 60 else 'gray'
-                    return f'color: {color}'
-
-                st.dataframe(
-                    matrix_df.style.applymap(color_winrate, subset=['Win Rate']),
-                    use_container_width=True, 
-                    hide_index=True
-                )
+                st.dataframe(matrix_df, use_container_width=True, hide_index=True)
             else:
-                st.warning("No opponent data found for this player in the logs.")
+                st.warning(f"No opponent data found for {hero} in the logs.")

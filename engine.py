@@ -22,15 +22,44 @@ class FaduMMREngine:
 
     def _generate_remark(self, p, apd, aod, rank):
         """Dynamic Power Remarks based on performance metrics."""
-        if p['is_new']: return "🆕 New Player debut. Welcome!"
+        if p.get('is_new'): return "🆕 New Player debut. Welcome!"
         if rank == 1: return "The Final Boss. Absolute League Dominance."
         if p.get('win_streak', 0) >= 3: return f"Heat Check! {p['win_streak']} Win Streak."
         if apd < -250: return "Elite Anchor. Carrying the load."
         if aod > 1700: return "Iron Man. Battling heavyweights."
         return "Pure Hustle. Consistent force."
 
+    def get_rivalry_matrix(self, text, target_player):
+        """Generates a win/loss matrix against every opponent for a specific player."""
+        if not target_player: return None
+        target = self.clean_name(target_player).lower()
+        matrix = {}
+        
+        logs = self._parse_to_list(text)
+        for g in logs:
+            wk = [self.clean_name(n).lower() for n in g['W']]
+            lk = [self.clean_name(n).lower() for n in g['L']]
+            
+            if target in wk:
+                for opp in lk:
+                    opp_name = opp.title()
+                    if opp_name not in matrix: matrix[opp_name] = {"Wins": 0, "Losses": 0}
+                    matrix[opp_name]["Wins"] += 1
+            if target in lk:
+                for opp in wk:
+                    opp_name = opp.title()
+                    if opp_name not in matrix: matrix[opp_name] = {"Wins": 0, "Losses": 0}
+                    matrix[opp_name]["Losses"] += 1
+                    
+        if not matrix: return None
+        df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
+        df.columns = ["Opponent", "Wins", "Losses"]
+        df["Total"] = df["Wins"] + df["Losses"]
+        df["Win Rate"] = (df["Wins"] / df["Total"]).map(lambda n: f"{n:.0%}")
+        return df.sort_values(by=["Total", "Wins"], ascending=False)
+
     def get_h2h(self, text, p1_name, p2_name):
-        """Scans logs to find games where P1 and P2 faced off (Rivalry Logic)."""
+        """Scans logs to find games where P1 and P2 faced off."""
         if not p1_name or not p2_name: return None
         p1 = self.clean_name(p1_name).lower()
         p2 = self.clean_name(p2_name).lower()
@@ -46,7 +75,7 @@ class FaduMMREngine:
                 h2h_stats["matches"].append({"Date": g['date'], "Winner": p1_name, "Loser": p2_name})
             elif p2 in wk and p1 in lk:
                 h2h_stats["p2_wins"] += 1
-                h2h_stats["matches"].append({"Date": g['date'], "Winner": p2_name, "Loser": p1_name})
+                h2h_stats["matches"].append({"Date": p2_name, "Winner": p2_name, "Loser": p1_name})
         return h2h_stats
 
     def _parse_to_list(self, text):
@@ -54,16 +83,11 @@ class FaduMMREngine:
         logs = []; cur_date = "Unknown"
         for line in text.strip().split('\n'):
             date_m = re.match(r'^(\d{1,2}-[A-Za-z]+)', line.strip())
-            if date_m: 
-                cur_date = date_m.group(1)
+            if date_m: cur_date = date_m.group(1)
             elif 'W:' in line and '|' in line:
                 try:
                     p = line.split('|')
-                    logs.append({
-                        'date': cur_date, 
-                        'W': [x.strip() for x in p[0].split('W:')[1].split(',')], 
-                        'L': [x.strip() for x in p[1].split('L:')[1].split(',')]
-                    })
+                    logs.append({'date': cur_date, 'W': [x.strip() for x in p[0].split('W:')[1].split(',')], 'L': [x.strip() for x in p[1].split('L:')[1].split(',')]})
                 except: continue
         return logs
 
@@ -77,8 +101,6 @@ class FaduMMREngine:
         num_dates = len(dates)
 
         for idx, d in enumerate(dates):
-            is_last = (idx == num_dates - 1)
-            # Reset session stats for active player tracking
             for p in self.players.values(): 
                 p['active'], p['s_w'], p['s_l'] = False, 0, 0
             
@@ -86,7 +108,6 @@ class FaduMMREngine:
                 wk = [self._init_p(n, idx, num_dates) for n in g['W']]
                 lk = [self._init_p(n, idx, num_dates) for n in g['L']]
                 
-                # Elite Threshold (80th Percentile)
                 cur_mmrs = [p['mmr'] for p in self.players.values()]
                 thresh = np.percentile(cur_mmrs, 80) if cur_mmrs else 1500
 
@@ -95,11 +116,10 @@ class FaduMMREngine:
                     p = self.players[n]; opps = [self.players[l]['mmr'] for l in lk]
                     if not p['active']: p['mmr_s'], p['active'] = p['mmr'], True
                     
-                    # Underdog Bonus Injection
                     bonus = 0
                     gap = max(opps) - p['mmr']
                     if p['mmr'] < 1349 and gap >= 300:
-                        bonus = min(gap * 0.25, 80) # Lambda simplified for v1.1
+                        bonus = min(gap * 0.25, 80)
                     
                     gain = 40 + bonus
                     p['mmr'] += gain; p['wins'] += 1; p['s_w'] += 1; p['win_streak'] += 1
@@ -113,7 +133,6 @@ class FaduMMREngine:
                     l = self.players[n]; part = self.players[lk[1-i]]
                     if not l['active']: l['mmr_s'], l['active'] = l['mmr'], True
                     
-                    # Shields (Rookie & Guardian)
                     loss = 10 if (l['wins'] + l['losses']) < config.ROOKIE_SHIELD_GAMES else 20
                     gap = l['mmr'] - part['mmr']
                     if (l['mmr'] >= thresh and gap >= config.GUARDIAN_SHIELD_THRESHOLD) or \
@@ -121,7 +140,6 @@ class FaduMMREngine:
                         loss = 16
                     
                     l['mmr'] -= loss
-                    # Legacy Floor Protection
                     if l['peak'] >= config.LEGACY_FLOOR_PEAK: 
                         l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
                     
@@ -133,7 +151,6 @@ class FaduMMREngine:
         return self._build_table(thresh), dates[-1], self.wealth_drift
 
     def _init_p(self, name, idx, total):
-        """Initializes a player if they don't exist in the current session state."""
         n = self.clean_name(name).lower()
         if n not in self.players:
             start = 1500 if n in self.seeds else 1000
@@ -145,7 +162,6 @@ class FaduMMREngine:
         return n
 
     def _build_table(self, thresh):
-        """Compiles the final 13-column leaderboard."""
         res = []
         for p in self.players.values():
             tot = p['wins'] + p['losses']
@@ -153,53 +169,16 @@ class FaduMMREngine:
             aod, apd = round(p['t_opp']/tot), round(p['t_p_delta']/tot)
             res.append({
                 "Rank": 0, "Player": p['name'], "Tier": self.get_tier(p['mmr']), 
-                "MMR": round(p['mmr']), "Peak": round(p['peak']), 
-                "+/-": round(p['mmr'] - p['mmr_s']) if p['active'] else 0, 
+                "MMR": int(round(p['mmr'])), "Peak": int(round(p['peak'])), 
+                "+/-": int(round(p['mmr'] - p['mmr_s'])) if p['active'] else 0, 
                 "AOD": aod, "APD": apd, "Status": "Elite" if p['mmr'] >= thresh else "Stable", 
                 "Confidence": "⭐⭐⭐" if tot > 15 else "⭐⭐" if tot > 5 else "⭐", 
-                "Last Session": str(f"{p['s_w']}-{p['s_l']}"), 
-                "Season Record": str(f"{p['wins']}-{p['losses']}"),
+                "Last Session": str(f"{p['s_w']}-{p['s_l']} "), 
+                "Season Record": str(f"{p['wins']}-{p['losses']} "), 
                 "Remarks": "", "w_sort": p['wins'], "key": p['name'].lower()
             })
-        
         df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
         for i, row in df.iterrows():
             df.at[i, "Remarks"] = self._generate_remark(self.players[row['key']], row['APD'], row['AOD'], row['Rank'])
-        
         return df.drop(columns=['w_sort', 'key'])
-    
-
-    def get_rivalry_matrix(self, text, target_player):
-        """Generates a win/loss matrix against every opponent for a specific player."""
-        if not target_player: return None
-        target = self.clean_name(target_player).lower()
-        matrix = {} # Key: Opponent, Value: {Wins, Losses}
-        
-        logs = self._parse_to_list(text)
-        for g in logs:
-            wk = [self.clean_name(n).lower() for n in g['W']]
-            lk = [self.clean_name(n).lower() for n in g['L']]
-            
-            # If target player won, increment wins against all losers
-            if target in wk:
-                for opp in lk:
-                    opp_name = opp.title() # Format nicely
-                    if opp_name not in matrix: matrix[opp_name] = {"Wins": 0, "Losses": 0}
-                    matrix[opp_name]["Wins"] += 1
-            
-            # If target player lost, increment losses against all winners
-            if target in lk:
-                for opp in wk:
-                    opp_name = opp.title()
-                    if opp_name not in matrix: matrix[opp_name] = {"Wins": 0, "Losses": 0}
-                    matrix[opp_name]["Losses"] += 1
-                    
-        if not matrix: return None
-        
-        # Convert to DataFrame for UI
-        df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
-        df.columns = ["Opponent", "Wins", "Losses"]
-        df["Total"] = df["Wins"] + df["Losses"]
-        df["Win Rate"] = (df["Wins"] / df["Total"]).map(lambda n: f"{n:.0%}")
-        return df.sort_values(by=["Total", "Wins"], ascending=False)
