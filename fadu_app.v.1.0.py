@@ -23,14 +23,14 @@ except:
     GEMINI_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# ✨ AI SANITIZER MODULE
+# ✨ AI SANITIZER MODULE (v1.1 FIX)
 # ==========================================
 def ai_sanitize_logs(raw_input, roster):
     if GEMINI_API_KEY == "NOT_CONFIGURED":
         return "ERROR: Please configure GEMINI_API_KEY in Streamlit Secrets."
     
     try:
-        # transport='rest' is the key fix for the 404 error you saw
+        # transport='rest' forces the stable v1 endpoint to fix your 404 error
         genai.configure(api_key=GEMINI_API_KEY, transport='rest')
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
@@ -55,7 +55,6 @@ def ai_sanitize_logs(raw_input, roster):
         
         response = model.generate_content(prompt)
         return response.text.strip()
-
     except Exception as e:
         return f"AI Error: {str(e)}"
 
@@ -202,42 +201,34 @@ class FaduMMREngineV43:
 # ==========================================
 st.set_page_config(page_title="Fadu MMR Engine v1.1", layout="wide", page_icon="🏸")
 
-# --- REPLACE YOUR SIDEBAR SECTION WITH THIS ---
+if 'clean_logs' not in st.session_state:
+    st.session_state.clean_logs = ""
+
 with st.sidebar:
     st.header("⚙️ Connections")
+    # 1. Sheets Check
+    if BRIDGE_URL == "NOT_CONFIGURED": st.error("Sheets: 🔴")
+    else: st.success("Sheets: 🟢 Connected")
     
-    # 1. Google Sheets Check
-    if BRIDGE_URL == "NOT_CONFIGURED": 
-        st.error("Sheets: 🔴")
-    else: 
-        st.success("Sheets: 🟢")
-    
-    # 2. Gemini AI Heartbeat Check
+    # 2. AI Heartbeat Check
     if GEMINI_API_KEY == "NOT_CONFIGURED": 
         st.error("AI Sanitizer: 🔴 (No Key)")
     else:
         try:
-            # Use 'rest' transport to avoid the 404/v1beta issue
             genai.configure(api_key=GEMINI_API_KEY, transport='rest')
-            # Fast check: Can we see the models?
-            genai.get_model('models/gemini-1.5-flash')
+            genai.get_model('models/gemini-1.5-flash-latest')
             st.success("AI Sanitizer: 🟢 Connected")
         except Exception as e:
             st.error("AI Sanitizer: 🟡 Connection Issue")
-            st.caption(f"Error: {str(e)[:100]}")
+            st.caption(f"Error: {str(e)[:50]}")
 
     st.divider()
-    st.markdown("### 📋 Instructions")
+    st.markdown("### 📋 Steps")
     st.caption("1. Paste messy logs.")
-    st.caption("2. Click 'AI Sanitize' to fix names.")
-    st.caption("3. Click 'Calculate & Sync'.")
-# --- END OF SIDEBAR SECTION ---
+    st.caption("2. AI Sanitize to fix names.")
+    st.caption("3. Calculate & Sync.")
 
 st.title("🏸 Fadu Badminton Power Rankings")
-
-# This creates a persistent state for the logs so AI can update them
-if 'clean_logs' not in st.session_state:
-    st.session_state.clean_logs = ""
 
 input_logs = st.text_area("Match Logs Input:", value=st.session_state.clean_logs, height=350)
 
