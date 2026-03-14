@@ -31,28 +31,34 @@ def ai_sanitize_logs(raw_input, roster):
     
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         prompt = f"""
-        You are a data cleaning assistant for Fadu Badminton League.
+        You are a Master Data Parser for the Fadu Badminton League.
         
         OFFICIAL ROSTER: {roster}
         
         TASK:
-        1. Clean the provided match logs.
-        2. Correct misspellings to match the Official Roster (e.g., 'Knt' -> 'Kent').
-        3. Format every game exactly as: 'Game X: W: Player1, Player2 | L: Player3, Player4'
-        4. Keep the Date headers (e.g., '20-Feb').
-        5. If a game has the wrong number of players or is confusing, add a comment line starting with '!! CHECK:' below that game.
+        Transform messy, conversational game logs into a strict programmatic format.
         
-        INPUT LOGS:
+        RULES:
+        1. OUTPUT FORMAT: 'Game X: W: Winner1, Winner2 | L: Loser1, Loser2'
+        2. FOOLPROOF MAPPING: Even if the input is a sentence like 'Kim, Lea vs Fadu, Mitch: WINNER - FADU, MITCH', you MUST identify that Fadu/Mitch are winners and Kim/Lea are losers.
+        3. ROSTER MATCHING: Map every name to the Official Roster. Fix typos (e.g., 'Knt' -> 'Kent').
+        4. DATE HEADERS: Keep lines like '20-Feb' or '07-Mar' exactly as they are.
+        5. NO CONVERSATION: Do not say 'Here are the logs' or 'I fixed them'. Return ONLY the cleaned data.
+        
+        EXAMPLE TRANSFORMATION:
+        Input: 'Game 16: Kim, Lea vsv Fadu, Mitch: WINNER - FADU, MITCH'
+        Output: 'Game 16: W: Fadu, Mitch | L: Kim, Lea'
+        
+        INPUT TO PROCESS:
         {raw_input}
-        
-        Strictly return ONLY the cleaned text.
         """
         
         response = model.generate_content(prompt)
-        return response.text
+        return response.text.strip()
+
     except Exception as e:
         return f"AI Error: {str(e)}"
 
@@ -199,19 +205,38 @@ class FaduMMREngineV43:
 # ==========================================
 st.set_page_config(page_title="Fadu MMR Engine v1.1", layout="wide", page_icon="🏸")
 
+st.set_page_config(page_title="Fadu MMR Engine v1.1", layout="wide", page_icon="🏸")
+
+# --- REPLACE YOUR SIDEBAR SECTION WITH THIS ---
 with st.sidebar:
     st.header("⚙️ Connections")
-    if BRIDGE_URL == "NOT_CONFIGURED": st.error("Sheets: 🔴")
-    else: st.success("Sheets: 🟢")
     
-    if GEMINI_API_KEY == "NOT_CONFIGURED": st.error("AI Sanitizer: 🔴")
-    else: st.success("AI Sanitizer: 🟢")
+    # 1. Google Sheets Check
+    if BRIDGE_URL == "NOT_CONFIGURED": 
+        st.error("Sheets: 🔴")
+    else: 
+        st.success("Sheets: 🟢")
     
+    # 2. Gemini AI Heartbeat Check
+    if GEMINI_API_KEY == "NOT_CONFIGURED": 
+        st.error("AI Sanitizer: 🔴 (No Key)")
+    else:
+        try:
+            # Use 'rest' transport to avoid the 404/v1beta issue
+            genai.configure(api_key=GEMINI_API_KEY, transport='rest')
+            # Fast check: Can we see the models?
+            genai.get_model('models/gemini-1.5-flash')
+            st.success("AI Sanitizer: 🟢 Connected")
+        except Exception as e:
+            st.error("AI Sanitizer: 🟡 Connection Issue")
+            st.caption(f"Error: {str(e)[:100]}")
+
     st.divider()
     st.markdown("### 📋 Instructions")
     st.caption("1. Paste messy logs.")
     st.caption("2. Click 'AI Sanitize' to fix names.")
     st.caption("3. Click 'Calculate & Sync'.")
+# --- END OF SIDEBAR SECTION ---
 
 st.title("🏸 Fadu Badminton Power Rankings")
 
