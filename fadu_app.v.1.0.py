@@ -26,9 +26,9 @@ except:
     BRIDGE_URL = "NOT_CONFIGURED"; GROQ_API_KEY = "NOT_CONFIGURED"
 
 # ==========================================
-# 🔍 SMART AI AUDITOR (VALIDATION MODE)
+# 🔍 SURGICAL AI VALIDATOR (NEW PLAYERS ONLY)
 # ==========================================
-def ai_audit_logs(raw_input, established_players):
+def ai_audit_new_players(raw_input, established_players):
     if GROQ_API_KEY == "NOT_CONFIGURED": return "ERROR: Missing GROQ_API_KEY."
     
     blocks = raw_input.strip().split('\n\n')
@@ -38,23 +38,22 @@ def ai_audit_logs(raw_input, established_players):
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
     prompt = f"""
-    You are the Data Validator for the Fadu Badminton League.
-    Analyze the most recent session and provide a summary report.
+    You are the Data Auditor for Fadu Badminton. 
+    Analyze ONLY the active session data provided below.
 
-    ESTABLISHED ROSTER: {established_players}
+    KNOWN PLAYERS (Do not flag these): {established_players}
 
-    TASKS:
-    1. List every unique player in this session and the number of games they played.
-    2. Flag names NOT in the Established Roster as '[SUSPECTED NEW]'.
-    3. Flag any games that have fewer than 2 winners or 2 losers.
+    TASK:
+    Identify any names in the ACTIVE DATA that are NOT in the KNOWN PLAYERS list.
+    For each suspected new player, list the specific Game Number(s) where they appear.
 
-    REPORT FORMAT:
-    ### 📋 Session Player Validation
-    **Name** - **Games Played**
-    - [Name]: [Count] [Flag if New]
+    OUTPUT FORMAT (Strictly Markdown Table):
+    | Suspected New Player | Game Number(s) |
+    | :--- | :--- |
+    | Name | Game X, Game Y |
 
-    ### ⚠️ Game Structure Concerns
-    - [Game X]: [Issue] (Or say 'None')
+    If no new players are found, say 'All players verified against roster.'
+    DO NOT list players who are already in the Known list.
     """
     
     payload = {
@@ -69,7 +68,7 @@ def ai_audit_logs(raw_input, established_players):
     except Exception as e: return f"Audit Error: {str(e)}"
 
 # ==========================================
-# 🧠 DYNAMIC MMR ENGINE v9.4
+# 🧠 DYNAMIC MMR ENGINE v10.0 (FULL 13-COL)
 # ==========================================
 class FaduMMREngine:
     def __init__(self, elite_list):
@@ -83,7 +82,7 @@ class FaduMMREngine:
             self.players[n_lower] = {
                 'name': n_clean, 'mmr': start, 'peak': start, 'wins': 0, 'losses': 0,
                 't_opp': 0, 't_p_delta': 0, 'mmr_s': start, 's_w': 0, 's_l': 0, 
-                'active': False, 'is_new': (date_idx == total_dates - 1), 'win_streak': 0
+                'active': False, 'is_new': (date_idx == total_dates - 1)
             }
         return n_lower
 
@@ -122,7 +121,9 @@ class FaduMMREngine:
                 for i, k in enumerate(wk):
                     w = self.players[k]; opp_mmrs = [self.players[lx]['mmr'] for lx in lk]
                     if not w['active']: w['mmr_s'], w['active'] = w['mmr'], True
-                    w['mmr'] += 40; w['wins'] += 1; w['s_w'] += 1; w['peak'] = max(w['peak'], w['mmr'])
+                    # Giant Slayer Bonus (+40 Base + Bonus)
+                    bonus = min((max(opp_mmrs) - w['mmr']) * 0.2, 80) if w['mmr'] < 1349 and (max(opp_mmrs) - w['mmr']) > 300 else 0
+                    w['mmr'] += (40 + bonus); w['wins'] += 1; w['s_w'] += 1; w['peak'] = max(w['peak'], w['mmr'])
                     w['t_opp'] += (sum(opp_mmrs) / 2); w['t_p_delta'] += (self.players[wk[1-i]]['mmr'] - w['mmr'])
                 for i, k in enumerate(lk):
                     l = self.players[k]; partner = self.players[lk[1-i]]; win_mmrs = [self.players[wx]['mmr'] for wx in wk]
@@ -149,7 +150,7 @@ class FaduMMREngine:
 # ==========================================
 # 🎨 UI & DASHBOARD
 # ==========================================
-st.set_page_config(page_title="Fadu MMR Engine v9.4", layout="wide")
+st.set_page_config(page_title="Fadu MMR Engine v10.0", layout="wide")
 
 with st.sidebar:
     st.title("🏸 Fadu Ops")
@@ -157,24 +158,25 @@ with st.sidebar:
     else: st.error("Registry: 🔴 Offline")
     if GROQ_API_KEY != "NOT_CONFIGURED": st.success("AI Auditor: 🟢 Ready")
     else: st.error("AI Auditor: 🔴 No Key")
-    st.divider(); st.caption("v9.4 | Smart Validation Mode")
+    st.divider(); st.caption("v10.0 | Ironclad Auditor")
 
 st.title("🏸 Fadu Badminton Power Rankings")
 input_area = st.text_area("Match Logs Input:", height=300)
 
 c1, c2, _ = st.columns([1.5, 1.5, 4])
 with c1:
-    if st.button("🔍 Run Session Validation", type="secondary", use_container_width=True):
+    if st.button("🔍 Audit New Players", type="secondary", use_container_width=True):
         if not input_area: st.warning("Paste logs first.")
         else:
-            with st.spinner("Analyzing roster status..."):
+            with st.spinner("Hunting for new debuts..."):
                 engine = FaduMMREngine(ELITE_START)
                 _, _, established = engine.simulate(input_area)
-                st.session_state.audit_report = ai_audit_logs(input_area, established)
+                st.session_state.audit_report = ai_audit_new_players(input_area, established)
 
 if 'audit_report' in st.session_state:
+    st.markdown("### 📋 Suspected Debut Report")
     st.markdown(st.session_state.audit_report)
-    if st.button("Clear Validation Report"): del st.session_state.audit_report; st.rerun()
+    if st.button("Close Report"): del st.session_state.audit_report; st.rerun()
 
 with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
@@ -190,7 +192,7 @@ with c2:
 if 'lb' in st.session_state:
     st.divider()
     st.subheader(f"📅 Session Results: {st.session_state.last_date}")
-    search = st.text_input("🔍 Search Player:", placeholder="Filter table...")
+    search = st.text_input("🔍 Search Player:", placeholder="Filter ranking table...")
     df = st.session_state.lb
     if search: df = df[df['Player'].str.contains(search, case=False)]
     st.dataframe(df, use_container_width=True, hide_index=True)
