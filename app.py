@@ -53,18 +53,34 @@ with c2:
                 engine = FaduMMREngine()
                 df, last_date, drift = engine.simulate(input_area)
                 
-                # Persist results in session state
+                # Update Session State for the UI
                 st.session_state.lb = df
                 st.session_state.drift = drift
                 st.session_state.date = last_date
                 
+                # The Handshake Logic
                 if "BRIDGE_URL" in st.secrets:
-                    payload = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
+                    # We ensure columns are converted to list and data to list-of-lists
+                    payload = {
+                        "target": "Registry", 
+                        "headers": df.columns.tolist(), 
+                        "values": df.values.tolist()
+                    }
                     try:
-                        resp = requests.post(st.secrets["BRIDGE_URL"], json=payload, timeout=20)
-                        st.toast(f"✅ Registry Updated: {resp.text}")
+                        resp = requests.post(
+                            st.secrets["BRIDGE_URL"], 
+                            json=payload, 
+                            timeout=20
+                        )
+                        if resp.status_code == 200:
+                            st.success(f"🎉 Registry Updated: {resp.text}")
+                        else:
+                            st.error(f"❌ Google Script Error: {resp.status_code}")
+                            st.write(resp.text) # This shows the error message from Google
                     except Exception as e:
-                        st.error(f"❌ Sync Error: {str(e)}")
+                        st.error(f"❌ Connection Failed: {str(e)}")
+                else:
+                    st.error("Missing BRIDGE_URL in Secrets!")
 
 # --- RESULTS TABS (The New Core) ---
 if 'lb' in st.session_state:
