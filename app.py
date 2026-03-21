@@ -4,34 +4,42 @@ import pandas as pd
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
-# --- DASHBOARD CONFIG ---
-st.set_page_config(page_title="Fadu MMR v1.1.5", layout="wide")
+# --- 1. DASHBOARD CONFIGURATION ---
+st.set_page_config(page_title="Fadu MMR v1.1.6", layout="wide")
 
-# --- SIDEBAR STATUS ---
+# --- 2. SIDEBAR STATUS & TOGGLES ---
 with st.sidebar:
     st.title("🏸 Fadu Ops")
+    
+    # Connection Indicators
     if "BRIDGE_URL" in st.secrets:
-        st.success("Registry: 🟢 Online")
+        st.success("Registry Connection: 🟢")
     else:
-        st.error("Registry: 🔴 Offline")
+        st.error("Registry Connection: 🔴")
         
     if "GROQ_API_KEY" in st.secrets:
-        st.success("Auditor: 🟢 Online")
+        st.success("AI Auditor: 🟢")
     else:
-        st.error("Auditor: 🔴 Offline")
+        st.error("AI Auditor: 🔴")
         
     st.divider()
-    st.caption("v1.1.5 | Decay & Matrix Build")
-    st.info("Tip: MMR Decay kicks in after 3 missed sessions. Check the 'Remarks' column in the leaderboard for warnings.")
+    
+    # THE NEW TOGGLE FEATURE
+    st.subheader("⚙️ Control Panel")
+    sync_enabled = st.checkbox("Enable Cloud Sync", value=True, help="If unchecked, data will only update in this dashboard and NOT upload to Google Sheets.")
+    
+    st.divider()
+    st.caption("v1.1.6 | Safety Toggle Build")
+    st.info("Tip: Uncheck 'Enable Cloud Sync' to test new logs without affecting the official Google Sheet.")
     st.info("Location: Quezon City, PH")
 
-# --- MAIN UI ---
+# --- 3. MAIN UI ---
 st.title("🏸 Fadu Badminton Power Rankings")
 input_area = st.text_area("Match Logs Input:", height=300, placeholder="Paste your chronological logs here...")
 
 c1, c2, _ = st.columns([1.5, 1.5, 4])
 
-# --- ACTION: AUDIT ---
+# --- 4. ACTION: AUDIT ---
 with c1:
     if st.button("🔍 Run Session Audit", use_container_width=True):
         if 'audit_report' in st.session_state: del st.session_state['audit_report']
@@ -50,13 +58,13 @@ if 'audit_report' in st.session_state:
         del st.session_state.audit_report
         st.rerun()
 
-# --- ACTION: CALCULATE & SYNC ---
+# --- 5. ACTION: CALCULATE & SYNC ---
 with c2:
     if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
         if not input_area.strip():
             st.warning("Please paste logs first.")
         else:
-            with st.spinner("Syncing to Cloud Registry..."):
+            with st.spinner("Processing MMR Math..."):
                 engine = FaduMMREngine()
                 df, last_date, drift = engine.simulate(input_area)
                 
@@ -65,23 +73,29 @@ with c2:
                 st.session_state.drift = drift
                 st.session_state.date = last_date
                 
-                if "BRIDGE_URL" in st.secrets:
-                    payload = {
-                        "target": "Registry", 
-                        "headers": df.columns.tolist(), 
-                        "values": df.values.tolist()
-                    }
-                    try:
-                        resp = requests.post(st.secrets["BRIDGE_URL"], json=payload, timeout=20)
-                        if resp.status_code == 200:
-                            st.success(f"🎉 Registry Updated: {resp.text}")
-                        else:
-                            st.error(f"❌ Sync Error: {resp.status_code}")
-                            st.write(resp.text)
-                    except Exception as e:
-                        st.error(f"❌ Connection Failed: {str(e)}")
+                # Logic check for the Safety Toggle
+                if sync_enabled:
+                    if "BRIDGE_URL" in st.secrets:
+                        payload = {
+                            "target": "Registry", 
+                            "headers": df.columns.tolist(), 
+                            "values": df.values.tolist()
+                        }
+                        try:
+                            resp = requests.post(st.secrets["BRIDGE_URL"], json=payload, timeout=20)
+                            if resp.status_code == 200:
+                                st.success(f"🎉 Registry Updated: {resp.text}")
+                            else:
+                                st.error(f"❌ Sync Error: {resp.status_code}")
+                                st.write(resp.text)
+                        except Exception as e:
+                            st.error(f"❌ Connection Failed: {str(e)}")
+                    else:
+                        st.error("Missing BRIDGE_URL in secrets.")
+                else:
+                    st.info("💡 Sync Disabled: Dashboard updated locally. No data was sent to Google Sheets.")
 
-# --- RESULTS TABS ---
+# --- 6. RESULTS TABS ---
 if 'lb' in st.session_state:
     st.divider()
     
@@ -113,8 +127,7 @@ if 'lb' in st.session_state:
             
         # Action: Direct H2H
         if st.button("Analyze Direct H2H", use_container_width=True):
-            engine = FaduMMREngine()
-            h2h = engine.get_h2h(input_area, hero, rival)
+            h2h = FaduMMREngine().get_h2h(input_area, hero, rival)
             
             if h2h and h2h["matches"]:
                 st.divider()
@@ -138,6 +151,6 @@ if 'lb' in st.session_state:
             else:
                 st.warning(f"No opponent data found for {hero} in the logs.")
 
-# --- FOOTER ---
+# --- 7. FOOTER ---
 st.divider()
-st.caption("v1.1.5 | Fadu Badminton Power Ranking System | Modular Baseline")
+st.caption("v1.1.6 | Fadu Badminton Power Ranking System | Modular Baseline")
