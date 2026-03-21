@@ -5,7 +5,7 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- DASHBOARD CONFIG ---
-st.set_page_config(page_title="Fadu MMR v1.1.2", layout="wide")
+st.set_page_config(page_title="Fadu MMR v1.1.5", layout="wide")
 
 # --- SIDEBAR STATUS ---
 with st.sidebar:
@@ -21,8 +21,9 @@ with st.sidebar:
         st.error("Auditor: 🔴 Offline")
         
     st.divider()
-    st.caption("v1.1.2 | Rivalry & Matrix Build")
-    st.info("Tip: Head over to the Rivalry tab after calculating to see careers and direct matchups.")
+    st.caption("v1.1.5 | Decay & Matrix Build")
+    st.info("Tip: MMR Decay kicks in after 3 missed sessions. Check the 'Remarks' column in the leaderboard for warnings.")
+    st.info("Location: Quezon City, PH")
 
 # --- MAIN UI ---
 st.title("🏸 Fadu Badminton Power Rankings")
@@ -136,3 +137,7 @@ if 'lb' in st.session_state:
                 st.dataframe(matrix_df, use_container_width=True, hide_index=True)
             else:
                 st.warning(f"No opponent data found for {hero} in the logs.")
+
+# --- FOOTER ---
+st.divider()
+st.caption("v1.1.5 | Fadu Badminton Power Ranking System | Modular Baseline")
