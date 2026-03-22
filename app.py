@@ -7,7 +7,7 @@ from auditor import ai_audit_session
 # --- 1. DASHBOARD CONFIGURATION ---
 # Wide layout is essential for the 13-column Fadu standard leaderboard.
 st.set_page_config(
-    page_title="Fadu MMR Power Rankings v1.2.0",
+    page_title="Fadu MMR Power Rankings v1.2.1",
     page_icon="🏸",
     layout="wide"
 )
@@ -21,6 +21,13 @@ with st.sidebar:
         st.success("Registry Connection: 🟢 Online")
     else:
         st.error("Registry Connection: 🔴 Offline")
+        
+    # DIRECT REGISTRY LINK
+    # Added as requested: Direct shortcut to the master data source.
+    st.markdown("### 📊 Data Source")
+    st.markdown("[🔗 Open Official Google Registry](https://docs.google.com/spreadsheets/d/1mPd-WUmyrwC5MEtBbADzyTmJJpOqr7MZPueloFUYyHo/edit?usp=sharing)")
+    
+    st.divider()
         
     if "GROQ_API_KEY" in st.secrets:
         st.success("AI Auditor: 🟢 Online")
@@ -39,7 +46,7 @@ with st.sidebar:
     
     st.divider()
 
-    # UPDATED: VIEW FILTERS (V1.2.0)
+    # UPDATED: VIEW FILTERS (V1.2.0 Logic)
     # These toggles allow the Commissioner to prune the list for public viewing.
     st.subheader("🎯 View Filters")
     hide_inactive = st.checkbox(
@@ -83,9 +90,17 @@ with st.sidebar:
             st.error("⚠️ Filter Error: Engine/App Mismatch. Please re-run Calculate.")
     
     st.divider()
+
+    # LEAGUE SEEDS REFERENCE
+    # Added as requested: A clear mention of players who received the 1500 MMR GM Seed.
+    with st.expander("💠 Initial Seeded Roster"):
+        st.caption("The following players began the season with a veteran seed of 1500 MMR:")
+        st.write("**Kenmore, Lance, Sam, Jerome, Pacs, VJ, Luke, Kent, Ivan, Efren, Jayson, Allen, Bombi**")
+    
+    st.divider()
     
     # Versioning and Metadata
-    st.caption("v1.2.0 | Triple Toggle Build")
+    st.caption("v1.2.1 | Registry & Seeds Build")
     st.info("🔥 **Decay Alert:** MMR Decay (-50) triggers after 3 missed sessions.")
     st.info("📍 Quezon City, PH")
 
@@ -255,4 +270,4 @@ if 'lb' in st.session_state:
 
 # --- 7. FOOTER ---
 st.divider()
-st.caption("v1.2.0 | Triple Toggle Build | Manila Build")
+st.caption("v1.2.1 | Fadu Badminton Power Ranking System | Manila Build")
