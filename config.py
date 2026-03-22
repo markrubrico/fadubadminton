@@ -5,7 +5,7 @@
 SEEDS = [
     "Kenmore", "Lance", "Sam", "Jerome", "Pacs", 
     "VJ", "Luke", "Kent", "Ivan", "Efren", 
-    "Jayson", "Allen", "Bombi", "AJ", "Chito", "Marf"
+    "Jayson", "Allen", "Bombi", "AJ", "Chito", "Marf","Migs"
 ]
 
 # 2. MLBB TIER THRESHOLDS
