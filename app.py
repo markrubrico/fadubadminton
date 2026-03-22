@@ -5,9 +5,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# We maintain the wide layout and official league title branding.
+# Wide layout is essential for the 13-column Fadu standard leaderboard.
 st.set_page_config(
-    page_title="Fadu MMR Power Rankings v1.1.8",
+    page_title="Fadu MMR Power Rankings v1.1.9",
     page_icon="🏸",
     layout="wide"
 )
@@ -16,7 +16,7 @@ st.set_page_config(
 with st.sidebar:
     st.title("🏸 Fadu Ops")
     
-    # Connection Indicators (preserving v1.1.7 registry/auditor checks)
+    # Connection Indicators (preserving registry/auditor health checks)
     if "BRIDGE_URL" in st.secrets:
         st.success("Registry Connection: 🟢 Online")
     else:
@@ -29,7 +29,7 @@ with st.sidebar:
         
     st.divider()
     
-    # CONTROL PANEL (The Safety Toggle logic)
+    # CONTROL PANEL: Global calculation settings
     st.subheader("⚙️ Control Panel")
     sync_enabled = st.checkbox(
         "Enable Cloud Sync", 
@@ -38,11 +38,44 @@ with st.sidebar:
     )
     
     st.divider()
+
+    # NEW: VIEW FILTERS (V1.1.9)
+    # These toggles allow the Commissioner to prune the list for public viewing.
+    st.subheader("🎯 View Filters")
+    hide_inactive = st.checkbox(
+        "Hide Inactive", 
+        value=False, 
+        help="Removes players who have missed 4 or more consecutive sessions."
+    )
+    hide_rookies = st.checkbox(
+        "Hide Rookies", 
+        value=False, 
+        help="Removes players with less than 5 total games played."
+    )
+
+    # DYNAMIC HIDDEN COUNT WARNING
+    # This logic calculates how many players are being filtered out in real-time.
+    if 'lb' in st.session_state:
+        df_full = st.session_state.lb
+        # Mirror the filtering logic used in the main table
+        df_temp = df_full.copy()
+        if hide_inactive:
+            df_temp = df_temp[df_temp['Missed_Sessions'] < 4]
+        if hide_rookies:
+            df_temp = df_temp[df_temp['Total_Games'] >= 5]
+        
+        hidden_count = len(df_full) - len(df_temp)
+        if hidden_count > 0:
+            st.warning(f"🚫 Players Hidden: {hidden_count}")
+        else:
+            st.info("✅ Showing Full Roster")
+    
+    st.divider()
     
     # Versioning and Metadata
-    st.caption("v1.1.8 | Heatmap Awareness Build")
+    st.caption("v1.1.9 | Filter & Counter Build")
     st.info("🔥 **Decay Alert:** MMR Decay (-50) triggers after 3 missed sessions.")
-    st.info("📍 Quezon City, PH | 1:50 AM")
+    st.info("📍 Quezon City, PH")
 
 # --- 3. MAIN UI INPUT ---
 st.title("🏸 Fadu Badminton Power Rankings")
@@ -69,7 +102,7 @@ with c1:
         else:
             with st.spinner("Phonetic & Duplicate Check..."):
                 engine = FaduMMREngine()
-                # Unpack all 4 values to match the v1.1.7 engine signature
+                # Unpack 4 values to maintain v1.1.9 engine compatibility
                 _, _, _, _ = engine.simulate(input_area) 
                 
                 # Run the AI audit logic
@@ -92,16 +125,16 @@ with c2:
             with st.spinner("Processing MMR Math..."):
                 engine = FaduMMREngine()
                 
-                # Unpack the 4-tuple from the engine
+                # Unpack the 4-tuple from the engine (Table, Date, Drift, DecayList)
                 df, last_date, drift, decayed = engine.simulate(input_area)
                 
                 # Persist results in session state
                 st.session_state.lb = df
                 st.session_state.drift = drift
                 st.session_state.date = last_date
-                st.session_state.decayed = decayed # List of dicts: {Player, Penalty, Missed}
+                st.session_state.decayed = decayed 
                 
-                # Handle Cloud Sync logic
+                # Handle Cloud Sync logic based on Safety Toggle
                 if sync_enabled:
                     if "BRIDGE_URL" in st.secrets:
                         payload = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
@@ -111,8 +144,11 @@ with c2:
                                 st.success(f"🎉 Registry Updated: {resp.text}")
                             else:
                                 st.error(f"❌ Sync Error: {resp.status_code}")
+                                st.write(resp.text)
                         except Exception as e:
                             st.error(f"❌ Connection Failed: {str(e)}")
+                    else:
+                        st.error("Missing BRIDGE_URL in secrets.")
                 else:
                     st.info("💡 Sync Disabled: Calculations are local only.")
 
@@ -125,17 +161,12 @@ if 'lb' in st.session_state:
         with st.expander("📉 Inactivity Decay Alert (Heatmap)", expanded=True):
             st.warning(f"The following players suffered MMR Decay on {st.session_state.date} due to 3+ missed sessions.")
             
-            # Convert list to DataFrame for styling
             decay_df = pd.DataFrame(st.session_state.decayed)
             
-            # Function to apply heat coloring to the 'Missed' column
             def style_decay_heatmap(val):
-                # 4 sessions = Light Orange, 5+ = Deep Red
-                if val <= 4: color = '#e67e22' 
-                else: color = '#c0392b'
+                color = '#e67e22' if val <= 4 else '#c0392b'
                 return f'background-color: {color}; color: white; font-weight: bold'
 
-            # Apply the style and display
             st.dataframe(
                 decay_df.style.applymap(style_decay_heatmap, subset=['Missed']),
                 use_container_width=True,
@@ -145,20 +176,38 @@ if 'lb' in st.session_state:
     # Tab navigation
     tab1, tab2 = st.tabs(["🏆 Leaderboard", "⚔️ Rivalries & Matrix"])
 
+    # --- TAB 1: LEADERBOARD ---
     with tab1:
         st.metric("Session Wealth Drift", f"{st.session_state.drift} MMR")
         st.subheader(f"📅 Results for: {st.session_state.date}")
         
-        # Search Filter
+        # Search Filter (UI-side)
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
-        df_disp = st.session_state.lb
-        if search:
-            df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        st.dataframe(df_disp, use_container_width=True, hide_index=True)
+        # APPLY UI FILTERS TO THE DATAFRAME
+        display_df = st.session_state.lb.copy()
+        
+        # A. Apply Search Filter
+        if search:
+            display_df = display_df[display_df['Player'].str.contains(search, case=False)]
+        
+        # B. Apply Sidebar Inactivity Filter
+        if hide_inactive:
+            display_df = display_df[display_df['Missed_Sessions'] < 4]
+            
+        # C. Apply Sidebar Rookie Filter
+        if hide_rookies:
+            display_df = display_df[display_df['Total_Games'] >= 5]
+        
+        # CLEANUP: Remove internal tracking columns before displaying to user
+        final_cols = [c for c in display_df.columns if c not in ["Total_Games", "Missed_Sessions"]]
+        
+        st.dataframe(display_df[final_cols], use_container_width=True, hide_index=True)
 
+    # --- TAB 2: RIVALRIES & MATRIX ---
     with tab2:
         st.subheader("⚔️ Rivalry Lookup")
+        # We always use the FULL player list for lookups, regardless of hiding
         player_list = sorted(st.session_state.lb['Player'].tolist())
         h1, h2 = st.columns(2)
         
@@ -180,7 +229,7 @@ if 'lb' in st.session_state:
         
         st.divider()
         
-        # Action: Career Matrix
+        # Career Opponent Matrix
         st.subheader(f"📊 {hero}'s Opponent Matrix")
         if st.button(f"Generate Career Matrix for {hero}", use_container_width=True):
             engine = FaduMMREngine()
@@ -190,4 +239,4 @@ if 'lb' in st.session_state:
 
 # --- 7. FOOTER ---
 st.divider()
-st.caption("v1.1.8 | Fadu Badminton Power Ranking System | Manila Build")
+st.caption("v1.1.9 | Fadu Badminton Power Ranking System | Manila Build")
