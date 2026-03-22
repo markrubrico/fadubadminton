@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import pandas as pd
+import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
@@ -95,8 +96,8 @@ with st.sidebar:
     # Added as requested: A clear mention of players who received the 1500 MMR GM Seed.
     with st.expander("💠 Initial Seeded Roster"):
         st.caption("The following players began the season with a veteran seed of 1500 MMR:")
-        st.write("**Kenmore, Lance, Sam, Jerome, Pacs, VJ, Luke, Kent, Ivan, Efren, Jayson, Allen, Bombi**")
-    
+        seed_string = ", ".join(config.SEEDS)
+        st.write(f"**{seed_string}**")
     st.divider()
     
     # Versioning and Metadata
