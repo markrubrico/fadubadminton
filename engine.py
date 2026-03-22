@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.1.9
+    Fadu MMR Engine v1.2.0
     ----------------------
     This document serves as the deterministic logic core for the Fadu Badminton 
     Power Rankings. It implements the following Master Specification v4.4 rules:
@@ -14,7 +14,7 @@ class FaduMMREngine:
     2. SHIELD PROTECTION: Rookie Shield (Games < 5) and Guardian 2.0 (Elite).
     3. UNDERDOG INJECTION: Lambda-weighted bonuses for low-MMR upsets.
     4. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection.
-    5. UI FILTERING: Internal keys for 'Total Games' and 'Missed Sessions'.
+    5. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
     """
 
     def __init__(self):
@@ -355,10 +355,10 @@ class FaduMMREngine:
                 "Remarks": "", 
                 "w_sort": p['wins'], 
                 "key": p['name'].lower(),
-                # --- NEW INTERNAL UI COLUMNS (V1.1.9) ---
-                # These columns are used by app.py for filtering but dropped before display.
+                # --- INTERNAL UI COLUMNS (V1.2.0) ---
                 "Total_Games": total, 
-                "Missed_Sessions": p['missed_sessions']
+                "Missed_Sessions": p['missed_sessions'],
+                "Is_Present": p['active_this_date']
             })
             
         # Final sort and ranking assignment

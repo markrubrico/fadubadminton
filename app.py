@@ -7,7 +7,7 @@ from auditor import ai_audit_session
 # --- 1. DASHBOARD CONFIGURATION ---
 # Wide layout is essential for the 13-column Fadu standard leaderboard.
 st.set_page_config(
-    page_title="Fadu MMR Power Rankings v1.1.9",
+    page_title="Fadu MMR Power Rankings v1.2.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -39,7 +39,7 @@ with st.sidebar:
     
     st.divider()
 
-    # NEW: VIEW FILTERS (V1.1.9)
+    # UPDATED: VIEW FILTERS (V1.2.0)
     # These toggles allow the Commissioner to prune the list for public viewing.
     st.subheader("🎯 View Filters")
     hide_inactive = st.checkbox(
@@ -52,28 +52,40 @@ with st.sidebar:
         value=False, 
         help="Removes players with less than 5 total games played."
     )
+    show_present_only = st.checkbox(
+        "Show present on last session only",
+        value=False,
+        help="Filters the list to show only players who appeared in the most recent log date."
+    )
 
     # DYNAMIC HIDDEN COUNT WARNING
-    # This logic calculates how many players are being filtered out in real-time.
+    # Updated to include defensive checks to prevent KeyErrors if the Engine is out of sync.
     if 'lb' in st.session_state:
         df_full = st.session_state.lb
-        # Mirror the filtering logic used in the main table
-        df_temp = df_full.copy()
-        if hide_inactive:
-            df_temp = df_temp[df_temp['Missed_Sessions'] < 4]
-        if hide_rookies:
-            df_temp = df_temp[df_temp['Total_Games'] >= 5]
         
-        hidden_count = len(df_full) - len(df_temp)
-        if hidden_count > 0:
-            st.warning(f"🚫 Players Hidden: {hidden_count}")
+        # Check for presence of all required filter columns in the dataframe
+        required_cols = ['Missed_Sessions', 'Total_Games', 'Is_Present']
+        if all(col in df_full.columns for col in required_cols):
+            df_temp = df_full.copy()
+            if hide_inactive:
+                df_temp = df_temp[df_temp['Missed_Sessions'] < 4]
+            if hide_rookies:
+                df_temp = df_temp[df_temp['Total_Games'] >= 5]
+            if show_present_only:
+                df_temp = df_temp[df_temp['Is_Present'] == True]
+            
+            hidden_count = len(df_full) - len(df_temp)
+            if hidden_count > 0:
+                st.warning(f"🚫 Players Hidden: {hidden_count}")
+            else:
+                st.info("✅ Showing Full Roster")
         else:
-            st.info("✅ Showing Full Roster")
+            st.error("⚠️ Filter Error: Engine/App Mismatch. Please re-run Calculate.")
     
     st.divider()
     
     # Versioning and Metadata
-    st.caption("v1.1.9 | Filter & Counter Build")
+    st.caption("v1.2.0 | Triple Toggle Build")
     st.info("🔥 **Decay Alert:** MMR Decay (-50) triggers after 3 missed sessions.")
     st.info("📍 Quezon City, PH")
 
@@ -102,7 +114,7 @@ with c1:
         else:
             with st.spinner("Phonetic & Duplicate Check..."):
                 engine = FaduMMREngine()
-                # Unpack 4 values to maintain v1.1.9 engine compatibility
+                # Unpack 4 values to maintain engine compatibility
                 _, _, _, _ = engine.simulate(input_area) 
                 
                 # Run the AI audit logic
@@ -191,16 +203,20 @@ if 'lb' in st.session_state:
         if search:
             display_df = display_df[display_df['Player'].str.contains(search, case=False)]
         
-        # B. Apply Sidebar Inactivity Filter
-        if hide_inactive:
+        # B. Apply Sidebar Inactivity Filter (with safety check)
+        if hide_inactive and 'Missed_Sessions' in display_df.columns:
             display_df = display_df[display_df['Missed_Sessions'] < 4]
             
-        # C. Apply Sidebar Rookie Filter
-        if hide_rookies:
+        # C. Apply Sidebar Rookie Filter (with safety check)
+        if hide_rookies and 'Total_Games' in display_df.columns:
             display_df = display_df[display_df['Total_Games'] >= 5]
+            
+        # D. Apply Sidebar Presence Filter (with safety check)
+        if show_present_only and 'Is_Present' in display_df.columns:
+            display_df = display_df[display_df['Is_Present'] == True]
         
         # CLEANUP: Remove internal tracking columns before displaying to user
-        final_cols = [c for c in display_df.columns if c not in ["Total_Games", "Missed_Sessions"]]
+        final_cols = [c for c in display_df.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present"]]
         
         st.dataframe(display_df[final_cols], use_container_width=True, hide_index=True)
 
@@ -239,4 +255,4 @@ if 'lb' in st.session_state:
 
 # --- 7. FOOTER ---
 st.divider()
-st.caption("v1.1.9 | Fadu Badminton Power Ranking System | Manila Build")
+st.caption("v1.2.0 | Triple Toggle Build | Manila Build")
