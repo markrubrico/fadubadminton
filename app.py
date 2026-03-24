@@ -8,7 +8,7 @@ from auditor import ai_audit_session
 # --- 1. DASHBOARD CONFIGURATION ---
 # Wide layout is essential for the 13-column Fadu standard leaderboard.
 st.set_page_config(
-    page_title="Fadu MMR Power Rankings v1.2.1",
+    page_title="Fadu MMR Power Rankings v1.2.6",
     page_icon="🏸",
     layout="wide"
 )
@@ -47,7 +47,7 @@ with st.sidebar:
     
     st.divider()
 
-    # UPDATED: VIEW FILTERS (V1.2.0 Logic)
+    # UPDATED: VIEW FILTERS (Synced to Config Rookie Threshold)
     # These toggles allow the Commissioner to prune the list for public viewing.
     st.subheader("🎯 View Filters")
     hide_inactive = st.checkbox(
@@ -56,9 +56,9 @@ with st.sidebar:
         help="Removes players who have missed 4 or more consecutive sessions."
     )
     hide_rookies = st.checkbox(
-        "Hide Rookies", 
+        f"Hide Rookies (< {config.ROOKIE_SHIELD_GAMES} games)", 
         value=False, 
-        help="Removes players with less than 5 total games played."
+        help=f"Removes players with less than {config.ROOKIE_SHIELD_GAMES} total games played."
     )
     show_present_only = st.checkbox(
         "Show present on last session only",
@@ -78,7 +78,7 @@ with st.sidebar:
             if hide_inactive:
                 df_temp = df_temp[df_temp['Missed_Sessions'] < 4]
             if hide_rookies:
-                df_temp = df_temp[df_temp['Total_Games'] >= 5]
+                df_temp = df_temp[df_temp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
             if show_present_only:
                 df_temp = df_temp[df_temp['Is_Present'] == True]
             
@@ -98,16 +98,17 @@ with st.sidebar:
         st.caption("The following players began the season with a veteran seed of 1500 MMR:")
         seed_string = ", ".join(config.SEEDS)
         st.write(f"**{seed_string}**")
+    
     st.divider()
     
     # Versioning and Metadata
-    st.caption("v1.2.1 | Registry & Seeds Build")
+    st.caption("v1.2.6 | Synergy Build")
     st.info("🔥 **Decay Alert:** MMR Decay (-50) triggers after 3 missed sessions.")
     st.info("📍 Quezon City, PH")
 
 # --- 3. MAIN UI INPUT ---
 st.title("🏸 Fadu Badminton Power Rankings")
-st.markdown("Automated MMR processing with Inactivity Decay tracking and Rivalry analysis.")
+st.markdown("Automated MMR processing with Inactivity Decay tracking and Synergy analysis.")
 
 input_area = st.text_area(
     "Match Logs Input:", 
@@ -201,8 +202,8 @@ if 'lb' in st.session_state:
                 hide_index=True
             )
 
-    # Tab navigation
-    tab1, tab2 = st.tabs(["🏆 Leaderboard", "⚔️ Rivalries & Matrix"])
+    # Tab navigation (Updated Tab 2 name)
+    tab1, tab2 = st.tabs(["🏆 Leaderboard", "⚔️ Combat & Synergy"])
 
     # --- TAB 1: LEADERBOARD ---
     with tab1:
@@ -225,7 +226,7 @@ if 'lb' in st.session_state:
             
         # C. Apply Sidebar Rookie Filter (with safety check)
         if hide_rookies and 'Total_Games' in display_df.columns:
-            display_df = display_df[display_df['Total_Games'] >= 5]
+            display_df = display_df[display_df['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
             
         # D. Apply Sidebar Presence Filter (with safety check)
         if show_present_only and 'Is_Present' in display_df.columns:
@@ -236,39 +237,55 @@ if 'lb' in st.session_state:
         
         st.dataframe(display_df[final_cols], use_container_width=True, hide_index=True)
 
-    # --- TAB 2: RIVALRIES & MATRIX ---
+    # --- TAB 2: COMBAT & SYNERGY (MAJOR UPGRADE) ---
     with tab2:
-        st.subheader("⚔️ Rivalry Lookup")
-        # We always use the FULL player list for lookups, regardless of hiding
         player_list = sorted(st.session_state.lb['Player'].tolist())
-        h1, h2 = st.columns(2)
+        st.subheader("👤 Select Profile to Analyze")
+        hero = st.selectbox("Choose Player:", player_list, key="p1_select")
         
-        with h1:
-            hero = st.selectbox("Select Hero Player:", player_list, key="p1_select")
-        with h2:
-            rival = st.selectbox("Select Rival Player:", player_list, key="p2_select")
+        st.divider()
+        col_m1, col_m2 = st.columns(2)
+        
+        # PART A: TEAMMATE SYNERGY (NEW)
+        with col_m1:
+            st.subheader("🤝 Teammate Synergy")
+            st.caption(f"Which partners result in the highest win rate for {hero}?")
+            if st.button(f"Generate Synergy Matrix for {hero}", use_container_width=True):
+                engine = FaduMMREngine()
+                synergy_df = engine.get_teammate_matrix(input_area, hero)
+                if synergy_df is not None:
+                    st.dataframe(synergy_df, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("No partner games found in the provided log.")
+        
+        # PART B: OPPONENT RIVALRY (PRESERVED)
+        with col_m2:
+            st.subheader("📊 Opponent Matrix")
+            st.caption(f"Historical win/loss record against specific rivals.")
+            if st.button(f"Generate Career Matrix for {hero}", use_container_width=True):
+                engine = FaduMMREngine()
+                rival_df = engine.get_rivalry_matrix(input_area, hero)
+                if rival_df is not None:
+                    st.dataframe(rival_df, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("No opponent data found.")
+        
+        st.divider()
+        
+        # PART C: DIRECT H2H (PRESERVED)
+        st.subheader("⚔️ Head-to-Head Lookup")
+        rival = st.selectbox("Compare against specific Rival:", player_list, key="p2_select")
             
         if st.button("Analyze Direct H2H", use_container_width=True):
             engine = FaduMMREngine()
             h2h = engine.get_h2h(input_area, hero, rival)
             
             if h2h and h2h["matches"]:
-                st.divider()
                 st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
                 st.table(pd.DataFrame(h2h["matches"]))
             else:
                 st.warning("No direct matches found.")
-        
-        st.divider()
-        
-        # Career Opponent Matrix
-        st.subheader(f"📊 {hero}'s Opponent Matrix")
-        if st.button(f"Generate Career Matrix for {hero}", use_container_width=True):
-            engine = FaduMMREngine()
-            matrix_df = engine.get_rivalry_matrix(input_area, hero)
-            if matrix_df is not None:
-                st.dataframe(matrix_df, use_container_width=True, hide_index=True)
 
 # --- 7. FOOTER ---
 st.divider()
-st.caption("v1.2.1 | Fadu Badminton Power Ranking System | Manila Build")
+st.caption("v1.2.6 | Fadu Badminton Synergy Build | Manila Build")

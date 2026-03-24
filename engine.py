@@ -5,16 +5,18 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.2.5
+    Fadu MMR Engine v1.2.6
     ----------------------
     This document serves as the deterministic logic core for the Fadu Badminton 
     Power Rankings. It implements the following Master Specification v4.4 rules:
     
-    1. INACTIVITY DECAY: -50 MMR penalty after 3 missed sessions (Rust Rule).
-    2. SHIELD PROTECTION: Rookie Shield (Games < 5) and Guardian 2.0 (Elite).
-    3. UNDERDOG INJECTION: Lambda-weighted bonuses for low-MMR upsets.
-    4. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection.
-    5. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
+    1. SYNERGY MATRIX: Tracks win/loss rates when paired with specific teammates.
+    2. CUMULATIVE DECAY: Tracks total MMR loss across a simulation run.
+    3. INACTIVITY DECAY: -50 MMR penalty after 3 missed sessions (Rust Rule).
+    4. SHIELD PROTECTION: Rookie Shield (Games < 5) and Guardian 2.0 (Elite).
+    5. UNDERDOG INJECTION: Lambda-weighted bonuses for low-MMR upsets.
+    6. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection.
+    7. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
     """
 
     def __init__(self):
@@ -77,6 +79,58 @@ class FaduMMREngine:
             
         return "Pure Hustle. Consistent force."
 
+    def get_teammate_matrix(self, text, target_player):
+        """
+        NEW FEATURE v1.2.6:
+        Scans all logs to build a win/loss matrix for teammates (Partners).
+        Identifies which partner results in the highest win probability.
+        """
+        if not target_player:
+            return None
+            
+        target = self.clean_name(target_player).lower()
+        matrix = {}
+        logs = self._parse_to_list(text)
+        
+        for game in logs:
+            winners = [self.clean_name(n).lower() for n in game['W']]
+            losers = [self.clean_name(n).lower() for n in game['L']]
+            
+            # Scenario A: Target was on the winning team
+            if target in winners:
+                # Find the teammate (the other person on the winning list)
+                teammates = [n for n in winners if n != target]
+                for tm in teammates:
+                    tm_name = tm.title()
+                    if tm_name not in matrix:
+                        matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0}
+                    matrix[tm_name]["Wins Together"] += 1
+            
+            # Scenario B: Target was on the losing team
+            elif target in losers:
+                # Find the teammate (the other person on the losing list)
+                teammates = [n for n in losers if n != target]
+                for tm in teammates:
+                    tm_name = tm.title()
+                    if tm_name not in matrix:
+                        matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0}
+                    matrix[tm_name]["Losses Together"] += 1
+                    
+        if not matrix:
+            return None
+            
+        # Convert the dictionary to a DataFrame for UI display
+        df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
+        df.columns = ["Teammate", "Wins", "Losses"]
+        df["Total Games"] = df["Wins"] + df["Losses"]
+        
+        # Calculate Win Rate for sorting purposes
+        df["WinRate_Val"] = (df["Wins"] / df["Total Games"])
+        df["Win Rate"] = df["WinRate_Val"].map(lambda n: f"{n:.0%}")
+        
+        # Sort by best win rate first, then by most games played together
+        return df.sort_values(by=["WinRate_Val", "Total Games"], ascending=False).drop(columns=['WinRate_Val'])
+
     def get_rivalry_matrix(self, text, target_player):
         """
         Scans all logs to build a win/loss matrix against every unique opponent.
@@ -112,7 +166,6 @@ class FaduMMREngine:
         if not matrix:
             return None
             
-        # Convert the dictionary to a DataFrame for UI display
         df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
         df.columns = ["Opponent", "Wins", "Losses"]
         df["Total"] = df["Wins"] + df["Losses"]
@@ -198,7 +251,7 @@ class FaduMMREngine:
         dates = list(dict.fromkeys([l['date'] for l in logs]))
         num_dates = len(dates)
         
-        # V1.2.5 FIX: Accumulator for decay penalties across the entire log
+        # Accumulator for decay penalties across the entire log
         decay_tracker = {}
 
         # Iterate through every unique session date
@@ -230,7 +283,7 @@ class FaduMMREngine:
                         p['mmr'] = max(p['mmr'] - penalty, starting_floor)
                         self.wealth_drift -= penalty
                         
-                        # V1.2.5 FIX: Add to the cumulative tracker for this run
+                        # Add to the cumulative tracker for this run
                         decay_tracker[p_id] = decay_tracker.get(p_id, 0) + penalty
                 else:
                     # Player is present today: Reset rust counter
@@ -306,7 +359,7 @@ class FaduMMREngine:
                     l['t_p_delta'] += (partner['mmr'] - l['mmr'])
                     self.wealth_drift -= loss
 
-        # V1.2.5 FIX: Generate the final report based on the total accumulated penalties
+        # Generate the final report based on the total accumulated penalties
         decay_report = []
         for p_id, total_penalty in decay_tracker.items():
             decay_report.append({
