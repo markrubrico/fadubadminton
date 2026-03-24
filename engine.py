@@ -83,7 +83,7 @@ class FaduMMREngine:
 
     def get_stamina_analysis(self, text, target_player):
         """
-        NEW FEATURE v1.2.8:
+        FIXED v1.2.8:
         Analyzes performance based on chronological game order within sessions.
         Categorizes games into 'Stamina Phases' to detect late-session fatigue.
         """
@@ -93,8 +93,7 @@ class FaduMMREngine:
         target = self.clean_name(target_player).lower()
         logs = self._parse_to_list(text)
         
-        # Defining the Fatigue Brackets based on game number
-        # Fresh (1-5), Warm (6-10), Peak (11-15), Fatigued (16+)
+        # Brackets: Fresh (1-5), Warm (6-10), Peak (11-15), Fatigued (16+)
         brackets = {
             "Fresh (Games 1-5)": {"Wins": 0, "Losses": 0},
             "Warm (Games 6-10)": {"Wins": 0, "Losses": 0},
@@ -107,7 +106,6 @@ class FaduMMREngine:
             lk = [self.clean_name(n).lower() for n in game['L']]
             num = game.get('game_num', 1)
             
-            # Determine Phase
             if num <= 5: phase = "Fresh (Games 1-5)"
             elif num <= 10: phase = "Warm (Games 6-10)"
             elif num <= 15: phase = "Peak (Games 11-15)"
@@ -155,8 +153,8 @@ class FaduMMREngine:
                 for tm in teammates:
                     tm_name = tm.title()
                     if tm_name not in matrix:
-                        matrix[tm_name] = {"Wins": 0, "Losses": 0, "Net MMR Impact": 0}
-                    matrix[tm_name]["Wins"] += 1
+                        matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0, "Net MMR Impact": 0}
+                    matrix[tm_name]["Wins Together"] += 1
                     # A win generates roughly +40 MMR wealth for the partner
                     matrix[tm_name]["Net MMR Impact"] += 40
             
@@ -166,8 +164,8 @@ class FaduMMREngine:
                 for tm in teammates:
                     tm_name = tm.title()
                     if tm_name not in matrix:
-                        matrix[tm_name] = {"Wins": 0, "Losses": 0, "Net MMR Impact": 0}
-                    matrix[tm_name]["Losses"] += 1
+                        matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0, "Net MMR Impact": 0}
+                    matrix[tm_name]["Losses Together"] += 1
                     # A loss costs the partner roughly -20 MMR
                     matrix[tm_name]["Net MMR Impact"] -= 20
                     
