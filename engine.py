@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.2.0
+    Fadu MMR Engine v1.2.5
     ----------------------
     This document serves as the deterministic logic core for the Fadu Badminton 
     Power Rankings. It implements the following Master Specification v4.4 rules:
@@ -186,7 +186,7 @@ class FaduMMREngine:
     def simulate(self, text):
         """
         THE CORE SIMULATION: Processes all games chronologically.
-        Calculates MMR gains, losses, shields, and rust decay.
+        Calculates MMR gains, losses, shields, and cumulative rust decay.
         """
         if not text.strip():
             return pd.DataFrame(), "None", 0, []
@@ -197,7 +197,9 @@ class FaduMMREngine:
         
         dates = list(dict.fromkeys([l['date'] for l in logs]))
         num_dates = len(dates)
-        decay_report = []
+        
+        # V1.2.5 FIX: Accumulator for decay penalties across the entire log
+        decay_tracker = {}
 
         # Iterate through every unique session date
         for idx, d in enumerate(dates):
@@ -228,9 +230,8 @@ class FaduMMREngine:
                         p['mmr'] = max(p['mmr'] - penalty, starting_floor)
                         self.wealth_drift -= penalty
                         
-                        # Only report decay if it happened on the final log date
-                        if is_last_date:
-                            decay_report.append({"Player": p['name'], "Penalty": -penalty, "Missed": p['missed_sessions']})
+                        # V1.2.5 FIX: Add to the cumulative tracker for this run
+                        decay_tracker[p_id] = decay_tracker.get(p_id, 0) + penalty
                 else:
                     # Player is present today: Reset rust counter
                     p['missed_sessions'] = 0
@@ -252,7 +253,6 @@ class FaduMMREngine:
                     if not p['active_this_date']: 
                         p['mmr_start_of_day'] = p['mmr']
                         p['active_this_date'] = True
-                        # Detect Rookies on their debut date only
                         p['is_new_debut'] = True if (is_last_date and p.get('total_games_before_session', 0) == 0) else False
                     
                     # 1. UNDERDOG BONUS
@@ -306,14 +306,20 @@ class FaduMMREngine:
                     l['t_p_delta'] += (partner['mmr'] - l['mmr'])
                     self.wealth_drift -= loss
 
-        # Final return includes the leaderboard table, latest date, wealth drift, and decay report
+        # V1.2.5 FIX: Generate the final report based on the total accumulated penalties
+        decay_report = []
+        for p_id, total_penalty in decay_tracker.items():
+            decay_report.append({
+                "Player": self.players[p_id]['name'], 
+                "Penalty": -total_penalty, 
+                "Missed": self.players[p_id]['missed_sessions']
+            })
+
+        # Return table, latest date, wealth drift, and the multi-session decay report
         return self._build_table(elite_thresh), dates[-1], self.wealth_drift, decay_report
 
     def _init_p(self, name):
-        """
-        Initializes a player dictionary if they haven't been seen before.
-        Determines starting MMR (1500 or 1000) based on seed status.
-        """
+        """Initializes a player dictionary if they haven't been seen before."""
         n = self.clean_name(name).lower()
         if n not in self.players:
             start_mmr = 1500 if n in self.seeds else 1000
@@ -328,17 +334,13 @@ class FaduMMREngine:
         return n
 
     def _build_table(self, thresh):
-        """
-        Compiles the master dataframe for UI display.
-        This method includes the hidden columns used for sidebar filtering.
-        """
+        """Compiles the master dataframe for UI display."""
         res = []
         for p in self.players.values():
             total = p['wins'] + p['losses']
             if total == 0:
                 continue
             
-            # Prepare result dictionary for the DataFrame
             res.append({
                 "Rank": 0, 
                 "Player": p['name'], 
@@ -361,11 +363,9 @@ class FaduMMREngine:
                 "Is_Present": p['active_this_date']
             })
             
-        # Final sort and ranking assignment
         df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
         
-        # Populate Remarks based on final rankings
         for i, row in df.iterrows():
             player_object = self.players[row['key']]
             df.at[i, "Remarks"] = self._generate_remark(player_object, row['APD'], row['AOD'], row['Rank'])
