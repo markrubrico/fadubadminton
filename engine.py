@@ -5,18 +5,20 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.2.6
+    Fadu MMR Engine v1.2.8
     ----------------------
     This document serves as the deterministic logic core for the Fadu Badminton 
     Power Rankings. It implements the following Master Specification v4.4 rules:
     
-    1. SYNERGY MATRIX: Tracks win/loss rates when paired with specific teammates.
-    2. CUMULATIVE DECAY: Tracks total MMR loss across a simulation run.
-    3. INACTIVITY DECAY: -50 MMR penalty after 3 missed sessions (Rust Rule).
-    4. SHIELD PROTECTION: Rookie Shield (Games < 5) and Guardian 2.0 (Elite).
-    5. UNDERDOG INJECTION: Lambda-weighted bonuses for low-MMR upsets.
-    6. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection.
-    7. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
+    1. STAMINA ANALYSIS: Analyzes win rates by session phase (Fresh, Warm, Peak, Fatigued).
+    2. FORCE MULTIPLIER: Calculates the 'Net MMR Impact' a player generates for partners.
+    3. SYNERGY MATRIX: Tracks win/loss rates when paired with specific teammates.
+    4. CUMULATIVE DECAY: Tracks total MMR loss across a multi-session simulation run.
+    5. INACTIVITY DECAY: -50 MMR penalty after 3 missed sessions (Rust Rule).
+    6. SHIELD PROTECTION: Rookie Shield (Games < 5) and Guardian 2.0 (Elite Mitigation).
+    7. UNDERDOG INJECTION: Lambda-weighted bonuses for high-MMR upset victories.
+    8. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection for veterans.
+    9. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
     """
 
     def __init__(self):
@@ -79,11 +81,62 @@ class FaduMMREngine:
             
         return "Pure Hustle. Consistent force."
 
+    def get_stamina_analysis(self, text, target_player):
+        """
+        NEW FEATURE v1.2.8:
+        Analyzes performance based on chronological game order within sessions.
+        Categorizes games into 'Stamina Phases' to detect late-session fatigue.
+        """
+        if not target_player:
+            return None
+            
+        target = self.clean_name(target_player).lower()
+        logs = self._parse_to_list(text)
+        
+        # Defining the Fatigue Brackets based on game number
+        # Fresh (1-5), Warm (6-10), Peak (11-15), Fatigued (16+)
+        brackets = {
+            "Fresh (Games 1-5)": {"Wins": 0, "Losses": 0},
+            "Warm (Games 6-10)": {"Wins": 0, "Losses": 0},
+            "Peak (Games 11-15)": {"Wins": 0, "Losses": 0},
+            "Fatigued (Games 16+)": {"Wins": 0, "Losses": 0}
+        }
+        
+        for game in logs:
+            wk = [self.clean_name(n).lower() for n in game['W']]
+            lk = [self.clean_name(n).lower() for n in game['L']]
+            num = game.get('game_num', 1)
+            
+            # Determine Phase
+            if num <= 5: phase = "Fresh (Games 1-5)"
+            elif num <= 10: phase = "Warm (Games 6-10)"
+            elif num <= 15: phase = "Peak (Games 11-15)"
+            else: phase = "Fatigued (Games 16+)"
+            
+            if target in wk:
+                brackets[phase]["Wins"] += 1
+            elif target in lk:
+                brackets[phase]["Losses"] += 1
+                
+        results = []
+        for phase_name, stats in brackets.items():
+            total_at_phase = stats["Wins"] + stats["Losses"]
+            if total_at_phase > 0:
+                results.append({
+                    "Session Phase": phase_name,
+                    "W": stats["Wins"],
+                    "L": stats["Losses"],
+                    "Total": total_at_phase,
+                    "Phase Win Rate": f"{(stats['Wins'] / total_at_phase):.0%}"
+                })
+        
+        return pd.DataFrame(results) if results else None
+
     def get_teammate_matrix(self, text, target_player):
         """
-        NEW FEATURE v1.2.6:
+        UPDATED v1.2.8: Force Multiplier Integration.
         Scans all logs to build a win/loss matrix for teammates (Partners).
-        Identifies which partner results in the highest win probability.
+        Calculates 'Net MMR Impact'—the wealth the hero generated for that teammate.
         """
         if not target_player:
             return None
@@ -98,38 +151,40 @@ class FaduMMREngine:
             
             # Scenario A: Target was on the winning team
             if target in winners:
-                # Find the teammate (the other person on the winning list)
                 teammates = [n for n in winners if n != target]
                 for tm in teammates:
                     tm_name = tm.title()
                     if tm_name not in matrix:
-                        matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0}
-                    matrix[tm_name]["Wins Together"] += 1
+                        matrix[tm_name] = {"Wins": 0, "Losses": 0, "Net MMR Impact": 0}
+                    matrix[tm_name]["Wins"] += 1
+                    # A win generates roughly +40 MMR wealth for the partner
+                    matrix[tm_name]["Net MMR Impact"] += 40
             
             # Scenario B: Target was on the losing team
             elif target in losers:
-                # Find the teammate (the other person on the losing list)
                 teammates = [n for n in losers if n != target]
                 for tm in teammates:
                     tm_name = tm.title()
                     if tm_name not in matrix:
-                        matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0}
-                    matrix[tm_name]["Losses Together"] += 1
+                        matrix[tm_name] = {"Wins": 0, "Losses": 0, "Net MMR Impact": 0}
+                    matrix[tm_name]["Losses"] += 1
+                    # A loss costs the partner roughly -20 MMR
+                    matrix[tm_name]["Net MMR Impact"] -= 20
                     
         if not matrix:
             return None
             
         # Convert the dictionary to a DataFrame for UI display
         df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
-        df.columns = ["Teammate", "Wins", "Losses"]
+        df.columns = ["Teammate", "Wins", "Losses", "Net MMR Impact"]
         df["Total Games"] = df["Wins"] + df["Losses"]
         
         # Calculate Win Rate for sorting purposes
         df["WinRate_Val"] = (df["Wins"] / df["Total Games"])
         df["Win Rate"] = df["WinRate_Val"].map(lambda n: f"{n:.0%}")
         
-        # Sort by best win rate first, then by most games played together
-        return df.sort_values(by=["WinRate_Val", "Total Games"], ascending=False).drop(columns=['WinRate_Val'])
+        # Sort by Win Rate then by Net MMR Impact (Force Multiplier)
+        return df.sort_values(by=["WinRate_Val", "Net MMR Impact"], ascending=False).drop(columns=['WinRate_Val'])
 
     def get_rivalry_matrix(self, text, target_player):
         """
@@ -166,6 +221,7 @@ class FaduMMREngine:
         if not matrix:
             return None
             
+        # Convert the dictionary to a DataFrame for UI display
         df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
         df.columns = ["Opponent", "Wins", "Losses"]
         df["Total"] = df["Wins"] + df["Losses"]
@@ -207,6 +263,7 @@ class FaduMMREngine:
         """
         The parser: Converts raw multi-line strings into structured dictionaries.
         Detects dates via Regex and splits W/L teams via the pipe '|' symbol.
+        UPDATED v1.2.8: Now captures 'Game X:' prefix to enable fatigue analysis.
         """
         logs = []
         current_date = "Unknown"
@@ -220,7 +277,13 @@ class FaduMMREngine:
             date_match = re.match(r'^(\d{1,2}-[A-Za-z]+)', line)
             if date_match:
                 current_date = date_match.group(1)
-            elif 'W:' in line and '|' in line:
+                continue
+                
+            # Detect game number for stamina analysis (e.g., "Game 1:")
+            game_num_match = re.match(r'^Game\s+(\d+):', line)
+            game_idx = int(game_num_match.group(1)) if game_num_match else 1
+            
+            if 'W:' in line and '|' in line:
                 try:
                     parts = line.split('|')
                     win_names = parts[0].split('W:')[1].split(',')
@@ -228,6 +291,7 @@ class FaduMMREngine:
                     
                     logs.append({
                         'date': current_date, 
+                        'game_num': game_idx,
                         'W': [x.strip() for x in win_names], 
                         'L': [x.strip() for x in lose_names]
                     })
@@ -359,7 +423,7 @@ class FaduMMREngine:
                     l['t_p_delta'] += (partner['mmr'] - l['mmr'])
                     self.wealth_drift -= loss
 
-        # Generate the final report based on the total accumulated penalties
+        # Final return includes the leaderboard table, latest date, wealth drift, and decay report
         decay_report = []
         for p_id, total_penalty in decay_tracker.items():
             decay_report.append({
@@ -368,11 +432,13 @@ class FaduMMREngine:
                 "Missed": self.players[p_id]['missed_sessions']
             })
 
-        # Return table, latest date, wealth drift, and the multi-session decay report
         return self._build_table(elite_thresh), dates[-1], self.wealth_drift, decay_report
 
     def _init_p(self, name):
-        """Initializes a player dictionary if they haven't been seen before."""
+        """
+        Initializes a player dictionary if they haven't been seen before.
+        Determines starting MMR (1500 or 1000) based on seed status.
+        """
         n = self.clean_name(name).lower()
         if n not in self.players:
             start_mmr = 1500 if n in self.seeds else 1000
@@ -387,13 +453,17 @@ class FaduMMREngine:
         return n
 
     def _build_table(self, thresh):
-        """Compiles the master dataframe for UI display."""
+        """
+        Compiles the master dataframe for UI display.
+        This method includes the hidden columns used for sidebar filtering.
+        """
         res = []
         for p in self.players.values():
             total = p['wins'] + p['losses']
             if total == 0:
                 continue
             
+            # Prepare result dictionary for the DataFrame
             res.append({
                 "Rank": 0, 
                 "Player": p['name'], 
@@ -416,9 +486,11 @@ class FaduMMREngine:
                 "Is_Present": p['active_this_date']
             })
             
+        # Final sort and ranking assignment
         df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
         
+        # Populate Remarks based on final rankings
         for i, row in df.iterrows():
             player_object = self.players[row['key']]
             df.at[i, "Remarks"] = self._generate_remark(player_object, row['APD'], row['AOD'], row['Rank'])

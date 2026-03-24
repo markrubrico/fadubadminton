@@ -8,7 +8,7 @@ from auditor import ai_audit_session
 # --- 1. DASHBOARD CONFIGURATION ---
 # Wide layout is essential for the 13-column Fadu standard leaderboard.
 st.set_page_config(
-    page_title="Fadu MMR Power Rankings v1.2.6",
+    page_title="Fadu MMR Power Rankings v1.2.8",
     page_icon="🏸",
     layout="wide"
 )
@@ -102,13 +102,13 @@ with st.sidebar:
     st.divider()
     
     # Versioning and Metadata
-    st.caption("v1.2.6 | Synergy Build")
+    st.caption("v1.2.8 | Elite Analytics Build")
     st.info("🔥 **Decay Alert:** MMR Decay (-50) triggers after 3 missed sessions.")
     st.info("📍 Quezon City, PH")
 
 # --- 3. MAIN UI INPUT ---
 st.title("🏸 Fadu Badminton Power Rankings")
-st.markdown("Automated MMR processing with Inactivity Decay tracking and Synergy analysis.")
+st.markdown("Automated MMR processing with Stamina Fatigue Analysis and Force Multiplier tracking.")
 
 input_area = st.text_area(
     "Match Logs Input:", 
@@ -202,7 +202,7 @@ if 'lb' in st.session_state:
                 hide_index=True
             )
 
-    # Tab navigation (Updated Tab 2 name)
+    # Tab navigation
     tab1, tab2 = st.tabs(["🏆 Leaderboard", "⚔️ Combat & Synergy"])
 
     # --- TAB 1: LEADERBOARD ---
@@ -237,7 +237,7 @@ if 'lb' in st.session_state:
         
         st.dataframe(display_df[final_cols], use_container_width=True, hide_index=True)
 
-    # --- TAB 2: COMBAT & SYNERGY (MAJOR UPGRADE) ---
+    # --- TAB 2: COMBAT & SYNERGY (ELITE UPGRADE) ---
     with tab2:
         player_list = sorted(st.session_state.lb['Player'].tolist())
         st.subheader("👤 Select Profile to Analyze")
@@ -246,20 +246,35 @@ if 'lb' in st.session_state:
         st.divider()
         col_m1, col_m2 = st.columns(2)
         
-        # PART A: TEAMMATE SYNERGY (NEW)
+        # PART A: SYNERGY & STAMINA
         with col_m1:
-            st.subheader("🤝 Teammate Synergy")
-            st.caption(f"Which partners result in the highest win rate for {hero}?")
+            # 1. NEW: STAMINA PHASE ANALYSIS
+            st.subheader("🔋 Stamina Phase Analysis")
+            st.caption(f"Does {hero}'s performance drop as the session progresses?")
+            if st.button(f"Analyze Stamina for {hero}", use_container_width=True):
+                engine = FaduMMREngine()
+                stamina_df = engine.get_stamina_analysis(input_area, hero)
+                if stamina_df is not None:
+                    st.dataframe(stamina_df, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Not enough game sequence data found.")
+
+            st.divider()
+
+            # 2. UPDATED: TEAMMATE SYNERGY (With Force Multiplier)
+            st.subheader("🤝 Teammate Synergy & Impact")
+            st.caption(f"Win rates and the Net MMR wealth {hero} generated for partners.")
             if st.button(f"Generate Synergy Matrix for {hero}", use_container_width=True):
                 engine = FaduMMREngine()
                 synergy_df = engine.get_teammate_matrix(input_area, hero)
                 if synergy_df is not None:
                     st.dataframe(synergy_df, use_container_width=True, hide_index=True)
                 else:
-                    st.warning("No partner games found in the provided log.")
+                    st.warning("No partner games found.")
         
-        # PART B: OPPONENT RIVALRY (PRESERVED)
+        # PART B: RIVALRIES
         with col_m2:
+            # 1. OPPONENT MATRIX
             st.subheader("📊 Opponent Matrix")
             st.caption(f"Historical win/loss record against specific rivals.")
             if st.button(f"Generate Career Matrix for {hero}", use_container_width=True):
@@ -269,23 +284,23 @@ if 'lb' in st.session_state:
                     st.dataframe(rival_df, use_container_width=True, hide_index=True)
                 else:
                     st.warning("No opponent data found.")
-        
-        st.divider()
-        
-        # PART C: DIRECT H2H (PRESERVED)
-        st.subheader("⚔️ Head-to-Head Lookup")
-        rival = st.selectbox("Compare against specific Rival:", player_list, key="p2_select")
             
-        if st.button("Analyze Direct H2H", use_container_width=True):
-            engine = FaduMMREngine()
-            h2h = engine.get_h2h(input_area, hero, rival)
-            
-            if h2h and h2h["matches"]:
-                st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
-                st.table(pd.DataFrame(h2h["matches"]))
-            else:
-                st.warning("No direct matches found.")
+            st.divider()
+
+            # 2. DIRECT H2H
+            st.subheader("⚔️ Head-to-Head Lookup")
+            rival = st.selectbox("Compare against specific Rival:", player_list, key="p2_select")
+                
+            if st.button("Analyze Direct H2H", use_container_width=True):
+                engine = FaduMMREngine()
+                h2h = engine.get_h2h(input_area, hero, rival)
+                
+                if h2h and h2h["matches"]:
+                    st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
+                    st.table(pd.DataFrame(h2h["matches"]))
+                else:
+                    st.warning("No direct matches found.")
 
 # --- 7. FOOTER ---
 st.divider()
-st.caption("v1.2.6 | Fadu Badminton Synergy Build | Manila Build")
+st.caption("v1.2.8 | Fadu Badminton Elite Analytics Build | Manila Build")
