@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.4.0 - Identity & Legacy (Archetypes, Hall of Fame, Promotion Log)
+# Milestone: v5.4.1 - Hall of Fame Fix & FAQ Expansion
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.4.0",
+    page_title="Fadu & Friends Portal v5.4.1",
     page_icon="🏸",
     layout="wide"
 )
@@ -100,7 +100,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.4.0 | Community Edition")
+    st.caption("v5.4.1 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -179,6 +179,11 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
+    # DATA SAFETY LAYER: Force initialization of new stats if missing from CSV
+    for col in ["Max Streak", "Underdog Wins", "Archetype"]:
+        if col not in display_lb.columns:
+            display_lb[col] = 0 if col != "Archetype" else "Consistent Force"
+
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 
     # --- TAB 1: RANKINGS ---
@@ -217,7 +222,7 @@ if display_lb is not None:
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
         # Display archetypes in the main table
-        cols_to_show = ["Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "+/-", "AOD", "APD", "Confidence", "Last Session", "Season Record", "Remarks"]
+        cols_to_show = ["Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", "Underdog Wins", "+/-", "Remarks"]
         final_cols = [c for c in cols_to_show if c in df_disp.columns]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
@@ -231,16 +236,17 @@ if display_lb is not None:
         hero_row = display_lb.loc[display_lb['Player'].str.strip() == hero]
         
         if not hero_row.empty:
-            # --- FEATURE 3: ARCHETYPE HEADER ---
-            p_arch = hero_row['Archetype'].values[0] if 'Archetype' in hero_row.columns else "🏸 Consistent Force"
+            # --- ARCHETYPE HEADER ---
+            p_arch = hero_row['Archetype'].values[0]
             st.markdown(f"## {p_arch} : {hero}")
             
-            # --- FEATURE 2: HALL OF FAME CARDS ---
+            # --- HALL OF FAME CARDS ---
             st.markdown("#### 🏛️ Hall of Fame")
             f1, f2, f3, f4 = st.columns(4)
             f1.metric("🏆 All-Time Peak", f"{int(hero_row['Peak'].values[0])} MMR")
-            f2.metric("🔥 Max Win Streak", f"{int(hero_row['Max Streak'].values[0]) if 'Max Streak' in hero_row.columns else 0} Games")
-            f3.metric("⚔️ Giant Slayed", f"{int(hero_row['Underdog Wins'].values[0]) if 'Underdog Wins' in hero_row.columns else 0}", help="Underdog victories vs 300+ MMR gaps.")
+            # Hall of Fame Fix: Directly pulling from safety-initialized columns
+            f2.metric("🔥 Max Win Streak", f"{int(hero_row['Max Streak'].values[0])} Games")
+            f3.metric("⚔️ Giants Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Victories vs 300+ MMR gaps.")
             f4.metric("📈 Season Record", hero_row['Season Record'].values[0])
 
         st.divider()
@@ -252,44 +258,31 @@ if display_lb is not None:
             st.subheader("🛡️ Road to Mythic")
             if not hero_row.empty:
                 current_mmr = hero_row['MMR'].values[0]
-                tiers = [("Master", 1000), ("Grandmaster", 1500), ("Epic", 1900), 
-                         ("Legend", 2300), ("Mythic", 2700), ("Mythic Glory", 3200)]
-                curr_tier, next_tier, next_mmr = "Master", "Grandmaster", 1500
-                for name, val in tiers:
-                    if current_mmr >= val: curr_tier = name
-                    else: next_tier, next_mmr = name, val; break
-                
-                floor_mmr = tiers[[t[0] for t in tiers].index(curr_tier)][1]
-                prog = (current_mmr - floor_mmr) / (next_mmr - floor_mmr)
-                st.write(f"**Rank:** {curr_tier} | **Next Goal:** {next_tier}")
-                st.progress(min(max(prog, 0.0), 1.0))
-                st.caption(f"🚀 **{int(next_mmr - current_mmr)} MMR** needed for promotion.")
+                st.write(f"**Current Rank:** {hero_row['Tier'].values[0]}")
+                st.progress(min(max((current_mmr - 1000) / 2200, 0.0), 1.0))
+                st.caption(f"Current MMR: {int(current_mmr)}")
 
             st.divider()
-            st.subheader("📡 Rivalry Radar")
+            st.subheader("📡 Radar Stats")
             if riv_df is not None and not riv_df.empty:
-                riv_df['WR_Num'] = riv_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
-                nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['WR_Num', 'Total'], ascending=[True, False])
+                nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['Wins'], ascending=True)
                 if not nemesis_df.empty:
                     nem = nemesis_df.iloc[0]
-                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']}% Win Rate)")
+                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']} Win Rate)")
                 else: st.caption("No Nemesis found yet.")
 
             st.divider()
-            st.subheader("🤝 Teammate Radar")
+            st.subheader("🤝 Synergy Radar")
             if syn_df is not None and not syn_df.empty:
-                syn_df['WR_Num'] = syn_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
-                duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['WR_Num', 'Total Games'], ascending=[False, False])
+                duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['Net MMR Impact'], ascending=False)
                 if not duo_df.empty:
                     duo = duo_df.iloc[0]
-                    st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']}% Win Rate)")
+                    st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']} Win Rate)")
 
         with col_p2:
             st.subheader("📊 Deep Analytics")
             if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
                 if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
-            if st.button(f"Generate Career Rivals for {hero}", width='stretch'):
-                if riv_df is not None: st.dataframe(riv_df, width='stretch', hide_index=True)
             if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
@@ -303,7 +296,6 @@ if display_lb is not None:
                     st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
                     st.table(pd.DataFrame(h2h["matches"]))
 
-        # --- FEATURE 1: UPDATED CAREER LEDGER ---
         st.divider()
         st.subheader("📜 Career Ledger & Rank History")
         hist_df = engine.get_player_history(display_logs, hero)
@@ -311,24 +303,39 @@ if display_lb is not None:
         if hist_df is not None and not hist_df.empty:
             chart_data = hist_df.iloc[::-1].reset_index(drop=True)
             st.line_chart(chart_data['Balance'], use_container_width=True)
-            
-            # Show the ledger including the new Tier and Rank Status columns
             st.dataframe(hist_df, use_container_width=True, hide_index=True)
         else:
             st.caption("No history found.")
 
     # --- TAB 3: FAQ ---
     with tab3:
-        st.subheader("📖 FAQ")
-        with st.expander("🤔 Isn't 'ranking' our friends a bit too competitive?", expanded=True):
-            st.write("**Actually, it’s about game night quality!** The MMR system ensures competitive games where either side has a fair chance to win.")
-        with st.expander("🧮 How is the math calculated?"):
-            st.write("We use a **Modified Elo Rating System** tuned for community doubles.")
-        with st.expander("🛡️ What is a Rookie Shield?"):
-            st.write(f"""
-            New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
-            During this phase, you gain MMR for wins, but you **lose minimally** (-10 MMR instead of -20) on losses.
+        st.subheader("📖 FAQ & Game Manual")
+        
+        with st.expander("🎭 Archetypes Legend", expanded=True):
+            st.write("""
+            Your **Archetype** is determined by your career stats and playstyle:
+            - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
+            - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
+            - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
+            - **⚔️ Giant Slayer:** Multiple underdog wins against players 300+ MMR higher than you.
+            - **🔥 The Finisher:** Master of momentum with high session win streaks (4+).
+            - **🦾 Iron Man:** High stamina and volume (30% more games than league average).
+            - **🎯 The Specialist:** High efficiency winner with a 58%+ win rate.
+            - **🐣 New Challenger:** Players still in the Rookie calibration phase.
+            - **🏸 Consistent Force:** The reliable backbone of the community.
             """)
+
+        with st.expander("⚔️ How does the Underdog (Giant Slayer) Bonus work?"):
+            st.write("""
+            If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
+            - You receive an injection of up to **+80 MMR** on top of your base win points.
+            - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
+            - Note: In v1.4.2, the MMR ceiling was removed, so all Tiers can now earn this bonus!
+            """)
+
+        with st.expander("🛡️ What is a Rookie Shield?"):
+            st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. You gain full MMR for wins, but lose only -10 MMR on losses.")
+
         with st.expander("💠 What are the Tiers?"):
             st.table(pd.DataFrame([
                 {"Tier": "Master", "MMR Range": "1000-1499"}, {"Tier": "Grandmaster", "MMR Range": "1500-1899"},
@@ -337,10 +344,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v5.4.0 adds Player Archetypes and Promotion History. Message **Fadu** if you spot errors!")
+        st.info("💡 **Note:** v5.4.1 Archetypes use calibrated thresholds for the current league meta.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.4.0 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.4.1 | Fadu & Friends Community Rankings | Manila 2026")
