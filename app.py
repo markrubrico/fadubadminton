@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.4 - Full Pipeline Integration & Synergy Restoration
+# Milestone: v5.1.6 - Column Mapping Fix & Analytics Alignment
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.4",
+    page_title="Fadu & Friends Portal v5.1.6",
     page_icon="🏸",
     layout="wide"
 )
@@ -31,11 +31,13 @@ def fetch_public_data():
         # Pull the Raw Match Logs
         hist_df = pd.read_csv(hist_url)
         
-        # v5.1.4 Fix: Reconstruct history logs correctly even in player mode.
-        # We drop NaNs and join the first column to feed the analytical engine.
+        # Reconstruct history logs correctly.
+        # Clean history logs: Drop NaNs and skip header strings if they exist.
         valid_logs = hist_df.iloc[:, 0].dropna().astype(str).tolist()
+        if valid_logs and "Raw_Logs" in valid_logs[0]:
+            valid_logs = valid_logs[1:]
+            
         raw_history = "\n".join(valid_logs)
-        
         return lb_df, raw_history
     except Exception:
         return None, None
@@ -99,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.4 | Community Edition")
+    st.caption("v5.1.6 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -204,7 +206,8 @@ if display_lb is not None:
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
             h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games")
         
-        h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
+        if 'MMR' in display_lb.columns:
+            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
 
         st.divider()
         if is_admin: 
@@ -221,14 +224,17 @@ if display_lb is not None:
         final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
-    # --- TAB 2: COMBAT & SYNERGY (v5.1.4 Restoration) ---
+    # --- TAB 2: COMBAT & SYNERGY (v5.1.6 Column Fix) ---
     with tab2:
-        # Normalize player names from Registry
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
         st.divider()
         col_p1, col_p2 = st.columns(2)
         engine = FaduMMREngine()
+
+        # v5.1.6 PRE-FETCH: Pre-load the analytics matrices
+        riv_df = engine.get_rivalry_matrix(display_logs, hero)
+        syn_df = engine.get_teammate_matrix(display_logs, hero)
         
         with col_p1:
             # 🟢 TIER PROGRESSION
@@ -251,52 +257,43 @@ if display_lb is not None:
 
             st.divider()
             
-            # 📡 HARDENED RIVALRY RADAR (Decoupled)
+            # 📡 v5.1.6 FIXED RIVALRY RADAR (Using 'Total' and 'Win Rate')
             st.subheader("📡 Rivalry Radar")
-            if not display_logs or len(str(display_logs).strip()) < 10:
-                st.info("Insufficient Match History to generate a Radar.")
-            else:
-                riv_df = engine.get_rivalry_matrix(display_logs, hero)
-                if riv_df is not None and not riv_df.empty and 'Games' in riv_df.columns:
-                    nemesis_df = riv_df[riv_df['Games'] >= 2].sort_values(by='Win%')
-                    if not nemesis_df.empty:
-                        nem = nemesis_df.iloc[0]
-                        st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win%']}% Win Rate)")
-                    else: st.caption("No Nemesis found yet (Min. 2 games required).")
-                else: st.caption("No rivalry records found for this player.")
+            if riv_df is not None and not riv_df.empty and 'Total' in riv_df.columns:
+                nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by='Win Rate')
+                if not nemesis_df.empty:
+                    nem = nemesis_df.iloc[0]
+                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']}% Win Rate)")
+                else: 
+                    st.caption("No Nemesis found yet (Min. 2 games required).")
+            else: 
+                st.caption("No rivalry records found for this player.")
 
             st.divider()
 
-            # 🤝 TEAMMATE SYNERGY RADAR (Decoupled)
+            # 🤝 v5.1.6 FIXED TEAMMATE RADAR (Using 'Total' and 'Win Rate')
             st.subheader("🤝 Teammate Radar")
-            if not display_logs or len(str(display_logs).strip()) < 10:
-                st.info("Insufficient Match History to scan synergy.")
-            else:
-                syn_df = engine.get_teammate_matrix(display_logs, hero)
-                if syn_df is not None and not syn_df.empty and 'Games' in syn_df.columns:
-                    duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
-                    if not duo_df.empty:
-                        duo = duo_df.iloc[0]
-                        st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win%']}% Win Rate)")
-                    else: st.caption("No Duo found yet (Min. 2 games required).")
-                else: st.caption("No teammate records found for this player.")
+            if syn_df is not None and not syn_df.empty and 'Total' in syn_df.columns:
+                duo_df = syn_df[syn_df['Total'] >= 2].sort_values(by='Win Rate', ascending=False)
+                if not duo_df.empty:
+                    duo = duo_df.iloc[0]
+                    st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win Rate']}% Win Rate)")
+                else: 
+                    st.caption("No Duo found yet (Min. 2 games required).")
+            else: 
+                st.caption("No teammate records found for this player.")
 
         with col_p2:
             st.subheader("📊 Deep Analytics")
             
-            # Feature: Teammate Matrix (Restored)
             if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
-                syn_full = engine.get_teammate_matrix(display_logs, hero)
-                if syn_full is not None: st.dataframe(syn_full, width='stretch', hide_index=True)
+                if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
                 else: st.warning("No teammate data available.")
 
-            # Feature: Career Rivals
             if st.button(f"Generate Career Rivals for {hero}", width='stretch'):
-                riv_full = engine.get_rivalry_matrix(display_logs, hero)
-                if riv_full is not None: st.dataframe(riv_full, width='stretch', hide_index=True)
+                if riv_df is not None: st.dataframe(riv_df, width='stretch', hide_index=True)
                 else: st.warning("No rivalry data available.")
 
-            # Feature: Fatigue Analysis
             if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
@@ -349,4 +346,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.4 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.1.6 | Fadu & Friends Community Rankings | Manila 2026")
