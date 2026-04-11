@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.0.0 - Official Public Player Portal Launch
+# Milestone: v5.0.1 - Hardened Public Player Portal
 st.set_page_config(
-    page_title="Fadu MMR Portal v5.0.0",
+    page_title="Fadu MMR Portal v5.0.1",
     page_icon="🏸",
     layout="wide"
 )
@@ -29,6 +29,7 @@ def fetch_public_data():
         hist_df = pd.read_csv(hist_url)
         
         # Reconstruct the raw multi-line log string from the Match_History sheet.
+        # This allows the engine to perform Synergy/Stamina analysis on public data.
         raw_history = "\n".join(hist_df.iloc[:, 0].astype(str).tolist())
         return lb_df, raw_history
     except Exception:
@@ -39,12 +40,12 @@ with st.sidebar:
     st.title("🏸 Fadu Ops")
     
     # 🔐 ADMIN ACCESS GATE
-    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to enable Calculation & Sync tools.")
+    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to enable Commissioner tools.")
     is_admin = (ops_key == st.secrets.get("OPS_PASSWORD", "fadu2026"))
     
     if is_admin:
         st.success("👨‍⚖️ Admin Mode: Authorized")
-        sync_enabled = st.checkbox("Enable Cloud Sync", value=True)
+        sync_enabled = st.checkbox("Enable Cloud Sync", value=True, help="If unchecked, calculations stay local.")
         
         st.divider()
         
@@ -88,12 +89,12 @@ with st.sidebar:
 
     st.divider()
     with st.expander("💠 Initial Seeded Roster"):
-        st.caption("v4.5/v5.0 Veteran Seed List (1500 MMR Start):")
+        st.caption("v5.0 Veteran Seed List (1500 MMR Start):")
         seed_string = ", ".join(config.SEEDS)
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.0.0 | Portal Launch Build")
+    st.caption("v5.0.1 | Hardened Portal Build")
     st.info("📍 Manila, PH")
 
 # --- 4. DATA LOADING ---
@@ -175,17 +176,17 @@ if display_lb is not None:
         st.subheader("🌟 Session Highlights")
         h1, h2, h3, h4 = st.columns(4)
         
-        # MVP Logic (+/-)
+        # 🟢 MVP Logic (+/-)
         if '+/-' in display_lb.columns:
             mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
             h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR")
             
-        # Hard Carry Logic (APD)
+        # 🟢 Hard Carry Logic (APD)
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
             h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD")
 
-        # Iron Man Logic (Games Played Today)
+        # 🟢 Iron Man Logic (Games Played Today)
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
                 try: return sum([int(i) for i in str(val).split('-')])
@@ -194,7 +195,8 @@ if display_lb is not None:
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
             h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games")
         
-        h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
+        if 'MMR' in display_lb.columns:
+            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
 
         st.divider()
         
@@ -207,8 +209,9 @@ if display_lb is not None:
         if hide_rookies: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only: df_disp = df_disp[df_disp['Is_Present'] == True]
         
-        cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
-        st.dataframe(df_disp[cols], width='stretch', hide_index=True)
+        # Final column pruning for public view
+        final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
+        st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
     # --- TAB 2: COMBAT & PROGRESSION ---
     with tab2:
@@ -219,7 +222,7 @@ if display_lb is not None:
         engine = FaduMMREngine()
         
         with col_p1:
-            # TIER PROGRESSION (Road to Mythic)
+            # 🟢 TIER PROGRESSION (Road to Mythic)
             st.subheader("🛡️ Road to Mythic")
             current_mmr = display_lb.loc[display_lb['Player'] == hero, 'MMR'].values[0]
             
@@ -233,29 +236,39 @@ if display_lb is not None:
                     next_tier, next_mmr = name, val
                     break
             
+            # Progress calculation logic
             floor_mmr = tiers[[t[0] for t in tiers].index(curr_tier)][1]
             prog = (current_mmr - floor_mmr) / (next_mmr - floor_mmr)
             st.write(f"**Rank:** {curr_tier} | **Next Goal:** {next_tier}")
             st.progress(min(max(prog, 0.0), 1.0))
-            st.caption(f"🚀 **{int(next_mmr - current_mmr)} MMR** to go.")
+            st.caption(f"🚀 **{int(next_mmr - current_mmr)} MMR** needed for promotion.")
 
             st.divider()
             
-            # RIVALRY RADAR
+            # 🟢 RIVALRY RADAR (Fix applied: Column Guards)
             st.subheader("📡 Rivalry Radar")
             riv_df = engine.get_rivalry_matrix(display_logs, hero)
-            if riv_df is not None:
+            if riv_df is not None and not riv_df.empty and 'Games' in riv_df.columns:
                 nemesis_df = riv_df[riv_df['Games'] >= 2].sort_values(by='Win%')
                 if not nemesis_df.empty:
                     nem = nemesis_df.iloc[0]
-                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} (Win rate vs them: {nem['Win%']}%)")
-                
-                syn_df = engine.get_teammate_matrix(display_logs, hero)
-                if syn_df is not None:
-                    duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
-                    if not duo_df.empty:
-                        duo = duo_df.iloc[0]
-                        st.success(f"🤝 **Dynamic Duo:** Strongest chemistry with {duo['Partner']} ({duo['Win%']}% Win rate)")
+                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} (Win rate: {nem['Win%']}% over {int(nem['Games'])} games)")
+                else:
+                    st.caption("No Nemesis found (Min. 2 games required).")
+            else:
+                st.caption("Insufficient rivalry data.")
+            
+            # Synergy Radar
+            syn_df = engine.get_teammate_matrix(display_logs, hero)
+            if syn_df is not None and not syn_df.empty and 'Games' in syn_df.columns:
+                duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
+                if not duo_df.empty:
+                    duo = duo_df.iloc[0]
+                    st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win%']}% Win rate)")
+                else:
+                    st.caption("No Dynamic Duo found.")
+            else:
+                st.caption("Insufficient synergy data.")
 
         with col_p2:
             st.subheader("🔋 Stamina Analysis")
@@ -281,4 +294,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.0.0 | Fadu Badminton Portal | Manila 2026")
+st.caption("v5.0.1 | Fadu Badminton Portal | Manila 2026")
