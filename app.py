@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.7 - Header Date Fix & Teammate Column Alignment
+# Milestone: v5.1.8 - Sorting Fix, Tooltips & UI Enhancement
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.7",
+    page_title="Fadu & Friends Portal v5.1.8",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.7 | Community Edition")
+    st.caption("v5.1.8 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -162,7 +162,7 @@ if is_admin:
         st.info(f"### 📋 Audit Findings\n{st.session_state.audit_report}")
         if st.button("Close Audit"): del st.session_state.audit_report; st.rerun()
 
-# --- 6. PLAYER HUB: THE ELITE EXPERIENCE ---
+# --- 6. PLAYER HUB ---
 st.divider()
 st.title("🏆 Fadu & Friends: Fun Community Rankings")
 
@@ -172,10 +172,8 @@ if is_admin and 'lb' in st.session_state:
     session_date = st.session_state.get('date', "Latest")
 else:
     display_lb, display_logs = public_lb, public_logs
-    # v5.1.7 Fix: Peek at the logs to find the last session date for public users
     if display_logs and len(display_logs) > 10:
         lines = display_logs.split('\n')
-        # Find the first line that contains a date (usually starts with 202x-xx-xx)
         date_lines = [l for l in lines if '-' in l and len(l) < 15]
         session_date = date_lines[0] if date_lines else "Cloud Sync"
     else:
@@ -188,7 +186,8 @@ if display_lb is not None:
             decay_df = pd.DataFrame(st.session_state.decayed)
             st.dataframe(decay_df.style.map(lambda v: 'background-color: #c0392b; color: white' if v > 4 else 'background-color: #e67e22; color: white', subset=['Missed']), width='stretch', hide_index=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 Highlights & Rankings", "⚔️ Combat & Synergy", "📖 FAQ"])
+    # UI Enhancement: More obvious labels
+    tab1, tab2, tab3 = st.tabs(["📊 [ RANKINGS ]", "⚔️ [ COMBAT & SYNERGY ]", "📖 [ FAQ & RULES ]"])
 
     # --- TAB 1: HIGHLIGHTS & LEADERBOARD ---
     with tab1:
@@ -197,11 +196,13 @@ if display_lb is not None:
         
         if '+/-' in display_lb.columns:
             mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
-            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR")
+            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR", 
+                      help="The player who gained the most MMR during the last session.")
             
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
-            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD")
+            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", 
+                      help="Average Point Difference: The player who dominated their rallies the most on average.")
 
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
@@ -211,10 +212,12 @@ if display_lb is not None:
                 except: return 0
             display_lb['Total_Today'] = display_lb['Last Session'].apply(calc_total)
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
-            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games")
+            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games", 
+                      help="The player who played the most total games in the last session.")
         
         if 'MMR' in display_lb.columns:
-            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
+            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced", 
+                      help="The average MMR score across the entire community roster.")
 
         st.divider()
         if is_admin: 
@@ -231,7 +234,7 @@ if display_lb is not None:
         final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
-    # --- TAB 2: COMBAT & SYNERGY (v5.1.7 Column-Vocabulary Alignment) ---
+    # --- TAB 2: COMBAT & SYNERGY (v5.1.8 Alignment & Numeric Sorting) ---
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
@@ -244,8 +247,8 @@ if display_lb is not None:
         syn_df = engine.get_teammate_matrix(display_logs, hero)
         
         with col_p1:
-            # 🟢 TIER PROGRESSION
-            st.subheader("🛡️ Road to Mythic")
+            # 🛡️ TIER PROGRESSION
+            st.subheader("🛡️ Road to Mythic", help="Tracks your progression through the competitive tiers based on current MMR.")
             hero_data = display_lb.loc[display_lb['Player'].str.strip() == hero]
             if not hero_data.empty:
                 current_mmr = hero_data['MMR'].values[0]
@@ -264,10 +267,13 @@ if display_lb is not None:
 
             st.divider()
             
-            # 📡 v5.1.7 RIVALRY RADAR (Vocab: 'Total', 'Win Rate')
-            st.subheader("📡 Rivalry Radar")
+            # 📡 RIVALRY RADAR (v5.1.8 Sorting Fix)
+            st.subheader("📡 Rivalry Radar", help="Surfaces your 'Nemesis'—the opponent with the lowest win rate against you (min. 2 games).")
             if riv_df is not None and not riv_df.empty and 'Total' in riv_df.columns:
-                nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by='Win Rate')
+                # v5.1.8 Fix: Convert Win Rate to numeric for accurate sorting (100 > 50)
+                riv_df['WR_Num'] = riv_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
+                nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['WR_Num', 'Total'], ascending=[True, False])
+                
                 if not nemesis_df.empty:
                     nem = nemesis_df.iloc[0]
                     st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']}% Win Rate)")
@@ -276,10 +282,13 @@ if display_lb is not None:
 
             st.divider()
 
-            # 🤝 v5.1.7 TEAMMATE RADAR (Vocab: 'Teammate', 'Total Games', 'Win Rate')
-            st.subheader("🤝 Teammate Radar")
+            # 🤝 TEAMMATE RADAR (v5.1.8 Sorting Fix)
+            st.subheader("🤝 Teammate Radar", help="Identifies your 'Dynamic Duo'—the partner with whom you share the highest win rate (min. 2 games).")
             if syn_df is not None and not syn_df.empty and 'Total Games' in syn_df.columns:
-                duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by='Win Rate', ascending=False)
+                # v5.1.8 Fix: Convert Win Rate to numeric for accurate sorting
+                syn_df['WR_Num'] = syn_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
+                duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['WR_Num', 'Total Games'], ascending=[False, False])
+                
                 if not duo_df.empty:
                     duo = duo_df.iloc[0]
                     st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']}% Win Rate)")
@@ -313,28 +322,14 @@ if display_lb is not None:
     # --- TAB 3: FAQ ---
     with tab3:
         st.subheader("📖 Community FAQ")
-        
         with st.expander("🤔 Isn't 'ranking' our friends a bit too competitive?", expanded=True):
             st.write("""
-            **Actually, it’s about game night quality!** We’ve all played in matches where the teams were so lopsided that nobody had fun—the winners felt bad, and the losers felt frustrated. This MMR system is just a tool to help ensure everyone gets competitive games where **either side has a fair chance to win.**
-            
-            Think of it as **Quality Assurance**: By knowing everyone's current form, we ensure longer rallies and closer scores. It's not about being 'better'; it's about making sure your friends have a better time on the court!
+            **Actually, it’s about game night quality!** The MMR system is a tool to ensure everyone gets competitive games where **either side has a fair chance to win.** By knowing everyone's current form, we ensure closer scores and longer rallies. It's not about being 'better'; it's about making sure everyone has a better time!
             """)
-            
         with st.expander("🧮 How is the math calculated?"):
-            st.write("""
-            We use a modified **Elo Rating System**. 
-            - Winning against a higher-ranked team grants more points.
-            - Losing to a lower-ranked team results in a larger point loss.
-            - **Underdog Bonus:** If you face a significantly stronger team, you gain a +5 bonus just for the challenge!
-            """)
-            
+            st.write("We use a modified Elo Rating System. Winning against a higher-ranked team grants more points. Underdogs get a +5 bonus just for the challenge!")
         with st.expander("🛡️ What is a Rookie Shield?"):
-            st.write(f"""
-            New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
-            During this phase, you can gain MMR, but you cannot lose it. This helps the system find your true rank without the initial stress of ranking down.
-            """)
-            
+            st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. During this phase, you can gain MMR, but you cannot lose it.")
         with st.expander("💠 What are the Tiers?"):
             st.table(pd.DataFrame([
                 {"Tier": "Master", "MMR Range": "1000 - 1499"},
@@ -349,4 +344,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.7 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.1.8 | Fadu & Friends Community Rankings | Manila 2026")
