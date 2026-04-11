@@ -1,21 +1,25 @@
 import streamlit as st
 import requests
 import pandas as pd
-import config # Master list & threshold configs
+import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
+# Unified Versioning: App v4.6.0 | Aligned with Master Technical Specification v4.5
 st.set_page_config(
     page_title="Fadu MMR Portal v4.6.0",
     page_icon="🏸",
     layout="wide"
 )
 
-# --- 2. DATA BRIDGE: PUBLIC FETCHING (The "Player" Source) ---
-@st.cache_data(ttl=600)  # Data refreshes every 10 minutes for players
+# --- 2. DATA BRIDGE: PUBLIC FETCHING ---
+@st.cache_data(ttl=600)  # Refreshes public data for players every 10 minutes
 def fetch_public_data():
-    """Pulls current Registry and Match_History from Published Google Sheet CSVs."""
+    """
+    Pulls current Registry and Match_History from Published Google Sheet CSVs.
+    This allows players to view data without administrative access.
+    """
     reg_url = st.secrets.get("REGISTRY_CSV_URL", "")
     hist_url = st.secrets.get("HISTORY_CSV_URL", "")
     
@@ -26,54 +30,55 @@ def fetch_public_data():
         lb_df = pd.read_csv(reg_url)
         hist_df = pd.read_csv(hist_url)
         
-        # Reconstruct multi-line string from the Match_History sheet for the analytics engine
+        # Reconstruct the raw multi-line log string from the Match_History sheet.
+        # This allows the engine to perform Synergy/Stamina analysis on public data.
         raw_history = "\n".join(hist_df.iloc[:, 0].astype(str).tolist())
         return lb_df, raw_history
     except Exception:
         return None, None
 
-# --- 3. SIDEBAR: THE CONDITIONAL GATEKEEPER ---
+# --- 3. SIDEBAR STATUS & ACCESS CONTROL ---
 with st.sidebar:
     st.title("🏸 Fadu Ops")
     
-    # 🔐 ACCESS CONTROL
-    # This is the "Conditional View" trigger.
-    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to unlock Admin Console.")
+    # 🔐 ADMIN ACCESS GATE
+    # This toggles between "Player View" and "Commissioner Console"
+    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to enable Calculation & Sync tools.")
     is_admin = (ops_key == st.secrets.get("OPS_PASSWORD", "fadu2026"))
     
     if is_admin:
         st.success("👨‍⚖️ Admin Mode: Authorized")
-        sync_enabled = st.checkbox("Enable Cloud Sync", value=True)
+        sync_enabled = st.checkbox("Enable Cloud Sync", value=True, help="If unchecked, calculations stay local.")
+        
+        st.divider()
+        
+        # 🛠️ ADMIN-ONLY TOOLS & LINKS
+        # These are now hidden from players to keep the UI clean and secure.
+        if "BRIDGE_URL" in st.secrets:
+            st.success("Registry Connection: 🟢 Online")
+        else:
+            st.error("Registry Connection: 🔴 Offline")
+            
+        st.markdown("### 📊 Data Source")
+        st.markdown("[🔗 Open Official Google Registry](https://docs.google.com/spreadsheets/d/1mPd-WUmyrwC5MEtBbADzyTmJJpOqr7MZPueloFUYyHo/edit?usp=sharing)")
+        
+        if "GROQ_API_KEY" in st.secrets:
+            st.success("AI Auditor: 🟢 Online")
+        else:
+            st.error("AI Auditor: 🔴 Offline")
+            
     else:
         st.info("👋 Player Mode: Read-Only")
 
     st.divider()
 
-    # Connection Status
-    if "BRIDGE_URL" in st.secrets:
-        st.success("Registry Connection: 🟢 Online")
-    else:
-        st.error("Registry Connection: 🔴 Offline")
-        
-    st.markdown("### 📊 Data Source")
-    st.markdown("[🔗 Open Google Registry](https://docs.google.com/spreadsheets/d/1mPd-WUmyrwC5MEtBbADzyTmJJpOqr7MZPueloFUYyHo/edit?usp=sharing)")
-    
-    st.divider()
-        
-    if "GROQ_API_KEY" in st.secrets:
-        st.success("AI Auditor: 🟢 Online")
-    else:
-        st.error("AI Auditor: 🔴 Offline")
-    
-    st.divider()
-
-    # VIEW FILTERS
+    # VIEW FILTERS (Visible to everyone - synced to Config Rookie Threshold)
     st.subheader("🎯 View Filters")
-    hide_inactive = st.checkbox("Hide Inactive (4+ Misses)", value=False)
+    hide_inactive = st.checkbox("Hide Inactive", value=False, help="Removes players with 4+ missed sessions.")
     hide_rookies = st.checkbox(f"Hide Rookies (< {config.ROOKIE_SHIELD_GAMES} games)", value=False)
     show_present_only = st.checkbox("Show last session only", value=False)
 
-    # Filter Logic for Hidden Count Warning
+    # DYNAMIC HIDDEN COUNT WARNING
     active_lb = st.session_state.get('lb', None)
     if active_lb is not None:
         df_full = active_lb
@@ -87,31 +92,38 @@ with st.sidebar:
             if hidden_count > 0: st.warning(f"🚫 Players Hidden: {hidden_count}")
 
     st.divider()
+    with st.expander("💠 Initial Seeded Roster"):
+        st.caption("The following players began the season with a veteran seed of 1500 MMR:")
+        seed_string = ", ".join(config.SEEDS)
+        st.write(f"**{seed_string}**")
+    
+    st.divider()
     st.caption("v4.6.0 | Unified Portal Build")
-    st.info("🔥 MMR Decay triggers after 3 missed sessions.")
+    st.info("🔥 **Decay Alert:** MMR Decay (-50) triggers after 3 missed sessions.")
+    st.info("📍 Quezon City, PH")
 
 # --- 4. DATA LOADING ---
 public_lb, public_logs = fetch_public_data()
 
-# --- 5. ADMIN VIEW: COMMISSIONER CONSOLE (CONDITIONAL) ---
+# --- 5. ADMIN VIEW: COMMISSIONER CONSOLE ---
 if is_admin:
     st.title("🛠️ Commissioner Console")
-    st.markdown("Recalculate the entire ecosystem and sync to the cloud.")
+    st.markdown("Recalculate the entire ecosystem and update the **Registry** and **Match_History**.")
 
     input_area = st.text_area(
         "Match Logs Input (Full History):", 
         height=300, 
-        placeholder="Paste chronological logs here...",
-        value=st.session_state.get('last_input', "")
+        placeholder="Paste your chronological logs here...",
+        help="Ensure the date format matches your engine parser."
     )
 
     c1, c2, _ = st.columns([1.5, 1.5, 4])
 
     with c1:
         if st.button("🔍 Run Session Audit", width='stretch'):
-            if not input_area.strip(): st.warning("Please paste logs.")
+            if not input_area.strip(): st.warning("Please paste logs first.")
             else:
-                with st.spinner("Auditing..."):
+                with st.spinner("Checking logs..."):
                     engine = FaduMMREngine()
                     engine.simulate(input_area) 
                     report = ai_audit_session(input_area, list(engine.players.keys()))
@@ -119,16 +131,13 @@ if is_admin:
 
     with c2:
         if st.button("🚀 Calculate & Sync", type="primary", width='stretch'):
-            if not input_area.strip(): st.warning("Please paste logs.")
+            if not input_area.strip(): st.warning("Please paste logs first.")
             else:
-                with st.spinner("Processing & Syncing..."):
+                with st.spinner("Syncing to Google Ecosystem..."):
                     engine = FaduMMREngine()
                     df, last_date, drift, decayed = engine.simulate(input_area)
-                    
-                    st.session_state.lb = df
-                    st.session_state.drift = drift
-                    st.session_state.date = last_date
-                    st.session_state.decayed = decayed 
+                    st.session_state.lb, st.session_state.drift = df, drift
+                    st.session_state.date, st.session_state.decayed = last_date, decayed 
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
@@ -152,16 +161,12 @@ if is_admin:
 st.divider()
 st.title("🏆 Fadu Badminton Power Rankings")
 
-# Determine data source: Admin Session vs Public Registry
 if is_admin and 'lb' in st.session_state:
-    display_lb = st.session_state.lb
-    display_logs = st.session_state.get('admin_logs', "")
+    display_lb, display_logs = st.session_state.lb, st.session_state.get('admin_logs', "")
 else:
-    display_lb = public_lb
-    display_logs = public_logs
+    display_lb, display_logs = public_lb, public_logs
 
 if display_lb is not None:
-    # Heatmap logic for admin session
     if is_admin and st.session_state.get('decayed'):
         with st.expander("📉 Inactivity Decay Alert", expanded=True):
             decay_df = pd.DataFrame(st.session_state.decayed)
@@ -171,8 +176,7 @@ if display_lb is not None:
 
     with tab1:
         if is_admin: st.metric("Session Wealth Drift", f"{st.session_state.drift} MMR")
-        search = st.text_input("🔍 Search Player:", placeholder="Name filter...")
-        
+        search = st.text_input("🔍 Search Player:", placeholder="Filter by name...")
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         if hide_inactive: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
@@ -184,31 +188,31 @@ if display_lb is not None:
 
     with tab2:
         player_list = sorted(display_lb['Player'].tolist())
-        hero = st.selectbox("Choose Player:", player_list)
+        hero = st.selectbox("Choose Player Profile:", player_list)
         st.divider()
         c_m1, c_m2 = st.columns(2)
         engine = FaduMMREngine()
         
         with c_m1:
-            st.subheader("🔋 Stamina Phase")
+            st.subheader("🔋 Stamina Phase Analysis")
             if st.button(f"Analyze Stamina for {hero}", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
             
             st.divider()
-            st.subheader("🤝 Synergy")
+            st.subheader("🤝 Teammate Synergy")
             if st.button(f"Generate Synergy Matrix for {hero}", width='stretch'):
                 syn_df = engine.get_teammate_matrix(display_logs, hero)
                 if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
         
         with c_m2:
-            st.subheader("📊 Opponent Matrix")
+            st.subheader("📊 Career Rivalries")
             if st.button(f"Generate Career Matrix for {hero}", width='stretch'):
                 riv_df = engine.get_rivalry_matrix(display_logs, hero)
                 if riv_df is not None: st.dataframe(riv_df, width='stretch', hide_index=True)
             
             st.divider()
-            st.subheader("⚔️ Head-to-Head")
+            st.subheader("⚔️ Direct Head-to-Head")
             rival = st.selectbox("Compare against Rival:", player_list)
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
@@ -219,4 +223,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v4.6.0 | Manila 2026")
+st.caption("v4.6.0 | Master Specification Build v4.5 | Manila 2026")
