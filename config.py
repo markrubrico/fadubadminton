@@ -3,8 +3,8 @@
 
 # 1. ELITE SEEDS (Starting MMR: 1500)
 SEEDS = [
-    "Kenmore", "Lance", "Sam", "Jerome", "Pacs", 
-    "VJ", "Luke", "Kent", "Ivan", "Efren", 
+    "Kenmore", "Lance_FBG", "Sam", "Jerome", "Pacs", 
+    "VJ", "Luke_FBG", "Ken", "Ivan", "Efren", 
     "Jayson", "Allen", "Bombi", "AJ", "Chito", "Marf","Migs"
 ]
 
