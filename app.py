@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.0.0 - The Unity Update (Full Scale Mobile Optimization)
+# Milestone: v6.0.2 - The Unity Update (Decay Visibility & Admin Oversight)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.0.0",
+    page_title="Fadu & Friends Portal v6.0.2",
     page_icon="🏸",
     layout="wide"
 )
@@ -26,7 +26,6 @@ def fetch_public_data():
             return None, None
         
         # TYPE-SAFETY: Force 'Player' to string to prevent 'ug' disappearing.
-        # Force APD/AOD to numeric to override Google Sheets date formatting.
         lb_df = pd.read_csv(reg_url)
         lb_df['Player'] = lb_df['Player'].astype(str)
         
@@ -61,8 +60,6 @@ with st.sidebar:
         sync_enabled = st.checkbox("Enable Cloud Sync", value=True, help="If unchecked, calculations stay local.")
         
         st.divider()
-        
-        # Admin-Only Connection Indicators
         if "BRIDGE_URL" in st.secrets:
             st.success("Registry: 🟢 Online")
         else:
@@ -80,14 +77,11 @@ with st.sidebar:
         st.info("👋 Player Mode: Read-Only")
 
     st.divider()
-
-    # VIEW FILTERS (Visible to everyone)
     st.subheader("🎯 View Filters")
     hide_inactive = st.checkbox("Hide Inactive", value=False, help="Removes players with 4+ missed sessions.")
     hide_rookies = st.checkbox(f"Hide Rookies (< {config.ROOKIE_SHIELD_GAMES} games)", value=False)
     show_present_only = st.checkbox("Show last session only", value=False)
 
-    # DYNAMIC HIDDEN COUNT WARNING
     active_lb = st.session_state.get('lb', None)
     if active_lb is not None:
         df_full = active_lb
@@ -107,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.0.0 | Unity Edition")
+    st.caption("v6.0.2 | Unity Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -164,6 +158,17 @@ if is_admin:
                         except:
                             st.error("Sync Failed")
 
+    # RESTORED: ADMIN ONLY RUST/DECAY REPORT
+    if 'decayed' in st.session_state:
+        with st.expander("📉 Inactivity Decay Report", expanded=True):
+            if st.session_state.decayed:
+                decay_df = pd.DataFrame(st.session_state.decayed)
+                total_rust = decay_df['Penalty'].sum()
+                st.warning(f"Total MMR Removed via Decay: {total_rust}")
+                st.table(decay_df)
+            else:
+                st.success("No players currently in decay (Rust Penalty).")
+
     if 'audit_report' in st.session_state:
         st.info(f"### 📋 Audit Findings\n{st.session_state.audit_report}")
         if st.button("Close Audit"): del st.session_state.audit_report; st.rerun()
@@ -195,8 +200,6 @@ if display_lb is not None:
     # --- TAB 1: RANKINGS (MOBILE OPTIMIZED) ---
     with tab1:
         st.markdown(f"###### 🌟 Session Highlights ({session_date})")
-        
-        # MOBILE GRID: 2x2 layout for vertical efficiency
         m_col1, m_col2 = st.columns(2)
         m_col3, m_col4 = st.columns(2)
         
@@ -206,7 +209,7 @@ if display_lb is not None:
             
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmin()]
-            m_col2.metric("🏋️ Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Average Partner Delta.")
+            m_col2.metric("🏋️ Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Negative values indicate carrying partners.")
 
         if 'AOD' in display_lb.columns:
             tank_row = display_lb.loc[display_lb['AOD'].idxmax()]
@@ -220,7 +223,7 @@ if display_lb is not None:
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        if hide_inactive and 'Missed_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_inactive and 'Miss_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
         if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
@@ -239,7 +242,7 @@ if display_lb is not None:
             }
         )
 
-    # --- TAB 2: COMBAT & SYNERGY (MOBILE STACKING OPTIMIZED) ---
+    # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
@@ -250,17 +253,15 @@ if display_lb is not None:
         
         if not hero_row.empty:
             st.markdown(f"## {hero_row['Archetype'].values[0]} : {hero}")
-            
             st.markdown("#### 🏛️ Hall of Fame")
             f1, f2 = st.columns(2)
             f3, f4 = st.columns(2)
             f1.metric("🏆 Peak", f"{int(hero_row['Peak'].values[0])}")
-            f2.metric("🔥 Streak", f"{int(hero_row['Max Streak'].values[0])}", help="Longest win streak.")
-            f3.metric("⚔️ Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Wins vs 300+ MMR gaps.")
+            f2.metric("🔥 Streak", f"{int(hero_row['Max Streak'].values[0])}")
+            f3.metric("⚔️ Slayed", f"{int(hero_row['Underdog Wins'].values[0])}")
             f4.metric("📈 Record", hero_row['Season Record'].values[0])
 
         st.divider()
-        # HERO PROFILE STACKING
         with st.container():
             st.subheader("🛡️ Road to Mythic")
             if not hero_row.empty:
@@ -286,7 +287,7 @@ if display_lb is not None:
             if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
                 if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
             
-            rival = st.selectbox("Compare vs specific Rival:", player_list)
+            rival = st.selectbox("Compare vs Rival:", player_list)
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
                 if h2h and h2h["matches"]:
@@ -304,11 +305,10 @@ if display_lb is not None:
                 st.line_chart(hist_df.iloc[::-1].reset_index(drop=True)['Balance'], use_container_width=True)
                 st.dataframe(hist_df, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: FAQ (UNITY PHILOSOPHY RE-INTEGRATION) ---
+    # --- TAB 3: FAQ ---
     with tab3:
         st.subheader("📖 FAQ & Game Manual")
         
-        # PHILOSOPHY SECTION (v6.0.0 NEW ADDITION)
         with st.expander("🏸 Why are we tracking MMR?", expanded=True):
             st.markdown("""
             **It’s not about who is better; it’s about making sure every session feels like a Finals match.**
@@ -339,7 +339,6 @@ if display_lb is not None:
 
         with st.expander("🎭 Archetypes Legend"):
             st.write("""
-            Your **Archetype** is determined by your career stats and playstyle:
             - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
             - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
             - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
@@ -370,10 +369,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.0.0 Archetypes use calibrated thresholds for the current league meta.")
+        st.info("💡 **Note:** v6.0.2 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v6.0.0 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.0.2 | Fadu & Friends Community Rankings | Manila 2026")
