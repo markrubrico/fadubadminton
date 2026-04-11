@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.9 - Visual Polish & APD Definition Update
+# Milestone: v5.2.1 - FAQ Logic Refinement & System Transparency
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.9",
+    page_title="Fadu & Friends Portal v5.2.1",
     page_icon="🏸",
     layout="wide"
 )
@@ -32,6 +32,7 @@ def fetch_public_data():
         hist_df = pd.read_csv(hist_url)
         
         # Reconstruct history logs correctly.
+        # Clean history logs: Drop NaNs and skip header strings if they exist.
         valid_logs = hist_df.iloc[:, 0].dropna().astype(str).tolist()
         if valid_logs and "Raw_Logs" in valid_logs[0]:
             valid_logs = valid_logs[1:]
@@ -100,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.9 | Community Edition")
+    st.caption("v5.2.1 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -163,7 +164,7 @@ if is_admin:
 
 # --- 6. PLAYER HUB ---
 st.divider()
-# Update: Smaller Main Title
+# UI Update: Downsized Main Title
 st.markdown("### 🏆 Fadu & Friends: Fun Community Rankings")
 
 # Source of Truth routing
@@ -180,13 +181,13 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    # Update: Separated Tab Labels without brackets
-    tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ & RULES"])
+    # UI Update: Clean Tab Labels
+    tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 
     # --- TAB 1: RANKINGS ---
     with tab1:
-        # Update: Smaller Highlights Header
-        st.markdown(f"##### 🌟 Session Highlights ({session_date})")
+        # UI Update: Downsized Session Highlights header
+        st.markdown(f"###### 🌟 Session Highlights ({session_date})")
         h1, h2, h3, h4 = st.columns(4)
         
         if '+/-' in display_lb.columns:
@@ -196,9 +197,9 @@ if display_lb is not None:
             
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
-            # Update: APD definition in tooltip
+            # Logic Update: APD redefined as Average Partner Delta
             h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", 
-                      help="Average Partner Delta: The player who dominated their rallies the most on average.")
+                      help="Average Partner Delta: Measures performance relative to the partners assigned, showing who elevates their game regardless of teammate rank.")
 
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
@@ -238,7 +239,7 @@ if display_lb is not None:
         col_p1, col_p2 = st.columns(2)
         engine = FaduMMREngine()
 
-        # PRE-FETCH: Pre-load the analytics matrices
+        # PRE-FETCH: Analytics matrices
         riv_df = engine.get_rivalry_matrix(display_logs, hero)
         syn_df = engine.get_teammate_matrix(display_logs, hero)
         
@@ -266,7 +267,6 @@ if display_lb is not None:
             if riv_df is not None and not riv_df.empty and 'Total' in riv_df.columns:
                 riv_df['WR_Num'] = riv_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
                 nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['WR_Num', 'Total'], ascending=[True, False])
-                
                 if not nemesis_df.empty:
                     nem = nemesis_df.iloc[0]
                     st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']}% Win Rate)")
@@ -279,7 +279,6 @@ if display_lb is not None:
             if syn_df is not None and not syn_df.empty and 'Total Games' in syn_df.columns:
                 syn_df['WR_Num'] = syn_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
                 duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['WR_Num', 'Total Games'], ascending=[False, False])
-                
                 if not duo_df.empty:
                     duo = duo_df.iloc[0]
                     st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']}% Win Rate)")
@@ -288,22 +287,17 @@ if display_lb is not None:
 
         with col_p2:
             st.subheader("📊 Deep Analytics")
-            
             if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
                 if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
-                else: st.warning("No teammate data available.")
-
             if st.button(f"Generate Career Rivals for {hero}", width='stretch'):
                 if riv_df is not None: st.dataframe(riv_df, width='stretch', hide_index=True)
-                else: st.warning("No rivalry data available.")
-
             if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
             
             st.divider()
             st.subheader("⚔️ Direct Head-to-Head")
-            rival = st.selectbox("Compare against specific Rival:", player_list)
+            rival = st.selectbox("Compare vs specific Rival:", player_list)
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
                 if h2h and h2h["matches"]:
@@ -312,27 +306,38 @@ if display_lb is not None:
 
     # --- TAB 3: FAQ ---
     with tab3:
-        st.subheader("📖 Community FAQ")
+        st.subheader("📖 FAQ")
         with st.expander("🤔 Isn't 'ranking' our friends a bit too competitive?", expanded=True):
             st.write("""
-            **Actually, it’s about game night quality!** The MMR system is a tool to ensure everyone gets competitive games where **either side has a fair chance to win.** By knowing everyone's current form, we ensure closer scores and longer rallies. It's not about being 'better'; it's about making sure everyone has a better time!
+            **Actually, it’s about game night quality!** The MMR system ensures competitive games where **either side has a fair chance to win.** By knowing form, we ensure closer scores and longer rallies. It's about everyone having a better time on the court!
             """)
         with st.expander("🧮 How is the math calculated?"):
-            st.write("We use a modified Elo Rating System. Winning against a higher-ranked team grants more points. Underdogs get a +5 bonus just for the challenge!")
+            st.write("""
+            We use a **Modified Elo Rating System** tuned for community doubles:
+            - **Opponent Strength:** Beating a team with a higher average MMR yields a larger gain. Losing to a lower-ranked team results in a larger penalty.
+            - **The Underdog Bonus (+5):** This is a flat incentive added to your session total if your team's average MMR was significantly lower than your opponents' (calculated via a parity threshold), regardless of the match result. It rewards the effort of taking on the league's top players!
+            """)
         with st.expander("🛡️ What is a Rookie Shield?"):
-            st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. During this phase, you can gain MMR, but you cannot lose it.")
+            st.write(f"""
+            New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
+            During this phase, you can gain MMR for wins to find your true rank, but you cannot lose it. Your score will either move up or stay flat at your **Starting Baseline** until your {config.ROOKIE_SHIELD_GAMES + 1}th game.
+            
+            **Starting Baselines:**
+            - **Veteran Seeds:** 1500 MMR
+            - **Standard Roster:** 1000 MMR
+            """)
         with st.expander("💠 What are the Tiers?"):
             st.table(pd.DataFrame([
-                {"Tier": "Master", "MMR Range": "1000 - 1499"},
-                {"Tier": "Grandmaster", "MMR Range": "1500 - 1899"},
-                {"Tier": "Epic", "MMR Range": "1900 - 2299"},
-                {"Tier": "Legend", "MMR Range": "2300 - 2699"},
-                {"Tier": "Mythic", "MMR Range": "2700 - 3199"},
-                {"Tier": "Mythic Glory", "MMR Range": "3200+"}
+                {"Tier": "Master", "MMR Range": "1000-1499"}, {"Tier": "Grandmaster", "MMR Range": "1500-1899"},
+                {"Tier": "Epic", "MMR Range": "1900-2299"}, {"Tier": "Legend", "MMR Range": "2300-2699"},
+                {"Tier": "Mythic", "MMR Range": "2700-3199"}, {"Tier": "Mythic Glory", "MMR Range": "3200+"}
             ]))
+        
+        st.divider()
+        st.info("💡 **Note:** This system is a work in progress. If you spot any data errors or have suggestions for the engine, kindly message **Fadu** so we can refine the math!")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.9 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.2.1 | Fadu & Friends Community Rankings | Manila 2026")
