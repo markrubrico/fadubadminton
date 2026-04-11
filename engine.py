@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.3.0
+    Fadu MMR Engine v1.4.1
     ----------------------
     This document serves as the deterministic logic core for the Fadu Badminton 
     Power Rankings. It implements the following Master Specification v4.4 rules:
@@ -19,7 +19,9 @@ class FaduMMREngine:
     7. UNDERDOG INJECTION: Lambda-weighted bonuses for high-MMR upset victories.
     8. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection for veterans.
     9. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
-    10. NEW: CAREER LEDGER: Snapshots match-by-match MMR deltas for auditing.
+    10. CAREER LEDGER: Snapshots match-by-match MMR deltas and Tier Transitions.
+    11. HALL OF FAME: Tracks All-time Peak MMR, Max Win Streaks, and Underdog counts.
+    12. ARCHETYPES: Classifies players based on APD, AOD, and win patterns.
     """
 
     def __init__(self):
@@ -38,7 +40,9 @@ class FaduMMREngine:
         """
         if not name:
             return ""
+            
         # The .replace("  ", " ") handles common manual entry typos in logs.
+        # Strips all spaces for the 'key' logic but handles common pipe/comma formatting.
         return str(name).strip().replace("  ", " ").replace(" ", "")
 
     def get_tier(self, mmr):
@@ -50,6 +54,47 @@ class FaduMMREngine:
             if mmr >= threshold:
                 return name
         return "Master"
+
+    def _determine_archetype(self, p, apd, aod, total):
+        """
+        NEW v1.4.0: Identity Logic.
+        Assigns a playstyle identity based on statistical performance.
+        RPG-style classification for player investment.
+        """
+        if total == 0:
+            return "🏸 Unranked"
+            
+        win_rate = p['wins'] / total
+        
+        # 1. THE GENERAL: High Rank + Lifting Partners (Elite Leader)
+        if p['mmr'] >= 2300 and apd > 50:
+            return "🎖️ The General"
+            
+        # 2. THE CATALYST: Highest APD (Makes everyone better)
+        if apd > 150:
+            return "🧪 The Catalyst"
+            
+        # 3. THE TANK: Highest AOD (Takes the hardest matchups)
+        if aod > 1850:
+            return "🛡️ The Tank"
+            
+        # 4. THE GIANT SLAYER: High Underdog Wins count
+        if p.get('underdog_wins', 0) >= 3:
+            return "⚔️ Giant Slayer"
+            
+        # 5. THE FINISHER: High Win Streak
+        if p.get('max_streak', 0) >= 5:
+            return "🔥 The Finisher"
+            
+        # 6. THE ROOKIE: Shield phase
+        if total < config.ROOKIE_SHIELD_GAMES:
+            return "🐣 New Challenger"
+            
+        # 7. THE SPECIALIST: High win rate but lower stats (Efficient)
+        if win_rate > 0.60:
+            return "🎯 The Specialist"
+            
+        return "🏸 Consistent Force"
 
     def _generate_remark(self, p, apd, aod, rank):
         """
@@ -82,15 +127,11 @@ class FaduMMREngine:
             
         return "Pure Hustle. Consistent force."
 
-    # --- NEW: PLAYER HISTORY LEDGER LOGIC (v1.3.0) ---
     def get_player_history(self, text, target_player):
         """
+        STEP 1 & 2: PROMOTION LOG & HALL OF FAME AUDIT.
         Performs a full chronological replay of the league history but filters 
         the output to a single player's perspective. 
-        
-        This is a 'High-Fidelity' audit trail—it recalculates the entire league 
-        step-by-step to ensure Guardian Shields and Underdog bonuses are 
-        calculated with the correct context of that specific moment in time.
         """
         if not target_player or not text.strip():
             return None
@@ -110,7 +151,7 @@ class FaduMMREngine:
                 start_mmr = 1500 if n in self.seeds else 1000
                 replay_players[n] = {
                     'name': name.strip(), 'mmr': start_mmr, 'peak': start_mmr, 
-                    'wins': 0, 'losses': 0
+                    'wins': 0, 'losses': 0, 'current_streak': 0, 'max_streak': 0
                 }
             return n
 
@@ -129,15 +170,24 @@ class FaduMMREngine:
                     p['missed_sessions'] += 1
                     if p['missed_sessions'] > 3:
                         old_mmr = p['mmr']
+                        old_tier = self.get_tier(old_mmr)
+                        
                         floor = 1500 if p_id in self.seeds else 1000
                         p['mmr'] = max(p['mmr'] - 50, floor)
+                        p['current_streak'] = 0 # Breaks streak
                         
                         # If the target is decaying, log it
                         if p_id == target_id and (old_mmr - p['mmr']) > 0:
+                            new_tier = self.get_tier(p['mmr'])
+                            change_log = "-"
+                            if old_tier != new_tier:
+                                change_log = f"🔽 Demoted to {new_tier}"
+
                             ledger.append({
                                 "Date": d, "Match": "OFF-COURT", "Event": "📉 RUST DECAY",
                                 "Partner": "-", "Opponents": "Inactivity Penalty",
-                                "Result": "Penalty", "Delta": -50, "Balance": int(round(p['mmr']))
+                                "Result": "Penalty", "Delta": -50, "Balance": int(round(p['mmr'])),
+                                "Tier": new_tier, "Rank Status": change_log
                             })
                 else:
                     p['missed_sessions'] = 0
@@ -154,6 +204,9 @@ class FaduMMREngine:
                 # --- PROCESS WINNERS ---
                 for i, name in enumerate(winners):
                     p = replay_players[name]
+                    old_mmr = p['mmr']
+                    old_tier = self.get_tier(old_mmr)
+                    
                     opp_mmrs = [replay_players[l]['mmr'] for l in losers]
                     
                     bonus = 0
@@ -165,21 +218,32 @@ class FaduMMREngine:
                     gain = 40 + bonus
                     p['mmr'] += gain
                     p['wins'] += 1
+                    p['current_streak'] += 1
+                    p['max_streak'] = max(p['max_streak'], p['current_streak'])
                     p['peak'] = max(p['peak'], p['mmr'])
                     
                     if name == target_id:
+                        new_tier = self.get_tier(p['mmr'])
+                        change_log = "-"
+                        if old_tier != new_tier:
+                            change_log = f"🔼 Promoted to {new_tier}"
+                            
                         partner = [n for n in game['W'] if self.clean_name(n).lower() != target_id][0]
                         opps = " / ".join(game['L'])
                         ledger.append({
                             "Date": d, "Match": f"Game {game.get('game_num', '?')}", 
                             "Event": "Victory" if bonus == 0 else "🔥 Underdog Win",
                             "Partner": partner, "Opponents": opps, "Result": "W",
-                            "Delta": f"+{int(gain)}", "Balance": int(round(p['mmr']))
+                            "Delta": f"+{int(gain)}", "Balance": int(round(p['mmr'])),
+                            "Tier": new_tier, "Rank Status": change_log
                         })
 
                 # --- PROCESS LOSERS ---
                 for i, name in enumerate(losers):
                     l = replay_players[name]
+                    old_mmr = l['mmr']
+                    old_tier = self.get_tier(old_mmr)
+                    
                     partner_obj = replay_players[losers[1-i]]
                     
                     loss = 10 if (l['wins'] + l['losses']) < config.ROOKIE_SHIELD_GAMES else 20
@@ -193,15 +257,22 @@ class FaduMMREngine:
                         l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
                     
                     l['losses'] += 1
+                    l['current_streak'] = 0 # Streak resets
                     
                     if name == target_id:
+                        new_tier = self.get_tier(l['mmr'])
+                        change_log = "-"
+                        if old_tier != new_tier:
+                            change_log = f"🔽 Demoted to {new_tier}"
+                            
                         partner_name = [n for n in game['L'] if self.clean_name(n).lower() != target_id][0]
                         opps = " / ".join(game['W'])
                         ledger.append({
                             "Date": d, "Match": f"Game {game.get('game_num', '?')}", 
                             "Event": "Defeat" if loss == 20 else "🛡️ Shielded Loss",
                             "Partner": partner_name, "Opponents": opps, "Result": "L",
-                            "Delta": f"-{int(loss)}", "Balance": int(round(l['mmr']))
+                            "Delta": f"-{int(loss)}", "Balance": int(round(l['mmr'])),
+                            "Tier": new_tier, "Rank Status": change_log
                         })
 
         # Return latest first
@@ -209,7 +280,6 @@ class FaduMMREngine:
 
     def get_stamina_analysis(self, text, target_player):
         """
-        FIXED v1.2.8:
         Analyzes performance based on chronological game order within sessions.
         Categorizes games into 'Stamina Phases' to detect late-session fatigue.
         """
@@ -262,7 +332,6 @@ class FaduMMREngine:
 
     def get_teammate_matrix(self, text, target_player):
         """
-        UPDATED v1.2.8: Force Multiplier Integration.
         Scans all logs to build a win/loss matrix for teammates (Partners).
         Calculates 'Net MMR Impact'—the wealth the hero generated for that teammate.
         """
@@ -285,7 +354,6 @@ class FaduMMREngine:
                     if tm_name not in matrix:
                         matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0, "Net MMR Impact": 0}
                     matrix[tm_name]["Wins Together"] += 1
-                    # A win generates roughly +40 MMR wealth for the partner
                     matrix[tm_name]["Net MMR Impact"] += 40
             
             # Scenario B: Target was on the losing team
@@ -296,7 +364,6 @@ class FaduMMREngine:
                     if tm_name not in matrix:
                         matrix[tm_name] = {"Wins Together": 0, "Losses Together": 0, "Net MMR Impact": 0}
                     matrix[tm_name]["Losses Together"] += 1
-                    # A loss costs the partner roughly -20 MMR
                     matrix[tm_name]["Net MMR Impact"] -= 20
                     
         if not matrix:
@@ -307,17 +374,14 @@ class FaduMMREngine:
         df.columns = ["Teammate", "Wins", "Losses", "Net MMR Impact"]
         df["Total Games"] = df["Wins"] + df["Losses"]
         
-        # Calculate Win Rate for sorting purposes
         df["WinRate_Val"] = (df["Wins"] / df["Total Games"])
         df["Win Rate"] = df["WinRate_Val"].map(lambda n: f"{n:.0%}")
         
-        # Sort by Win Rate then by Net MMR Impact (Force Multiplier)
         return df.sort_values(by=["WinRate_Val", "Net MMR Impact"], ascending=False).drop(columns=['WinRate_Val'])
 
     def get_rivalry_matrix(self, text, target_player):
         """
         Scans all logs to build a win/loss matrix against every unique opponent.
-        Used for the 'Career Matrix' feature in the Streamlit UI.
         """
         if not target_player:
             return None
@@ -349,7 +413,6 @@ class FaduMMREngine:
         if not matrix:
             return None
             
-        # Convert the dictionary to a DataFrame for UI display
         df = pd.DataFrame.from_dict(matrix, orient='index').reset_index()
         df.columns = ["Opponent", "Wins", "Losses"]
         df["Total"] = df["Wins"] + df["Losses"]
@@ -360,7 +423,6 @@ class FaduMMREngine:
     def get_h2h(self, text, p1_name, p2_name):
         """
         Performs a direct Head-to-Head (H2H) lookup between two specific names.
-        Returns wins, losses, and a specific list of match dates.
         """
         if not p1_name or not p2_name:
             return None
@@ -375,12 +437,9 @@ class FaduMMREngine:
             wk = [self.clean_name(n).lower() for n in game['W']]
             lk = [self.clean_name(n).lower() for n in game['L']]
             
-            # Check if P1 won vs P2
             if p1 in wk and p2 in lk:
                 h2h_stats["p1_wins"] += 1
                 h2h_stats["matches"].append({"Date": game['date'], "Winner": p1_name, "Loser": p2_name})
-            
-            # Check if P2 won vs P1
             elif p2 in wk and p1 in lk:
                 h2h_stats["p2_wins"] += 1
                 h2h_stats["matches"].append({"Date": game['date'], "Winner": p2_name, "Loser": p1_name})
@@ -391,7 +450,6 @@ class FaduMMREngine:
         """
         The parser: Converts raw multi-line strings into structured dictionaries.
         Detects dates via Regex and splits W/L teams via the pipe '|' symbol.
-        UPDATED v1.2.8: Now captures 'Game X:' prefix to enable fatigue analysis.
         """
         logs = []
         current_date = "Unknown"
@@ -424,7 +482,6 @@ class FaduMMREngine:
                         'L': [x.strip() for x in lose_names]
                     })
                 except Exception:
-                    # Skip malformed lines to prevent simulation crashes
                     continue
         return logs
 
@@ -442,8 +499,6 @@ class FaduMMREngine:
         
         dates = list(dict.fromkeys([l['date'] for l in logs]))
         num_dates = len(dates)
-        
-        # Accumulator for decay penalties across the entire log
         decay_tracker = {}
 
         # Iterate through every unique session date
@@ -452,33 +507,26 @@ class FaduMMREngine:
             players_today = set()
             session_games = [x for x in logs if x['date'] == d]
             
-            # Identify which players are active in THIS specific session
             for g in session_games:
                 all_active = g['W'] + g['L']
                 players_today.update([self.clean_name(n).lower() for n in all_active])
 
             # --- PRE-SESSION LOGIC: RUST CHECK (DECAY) ---
             for p_id, p in self.players.items():
-                # Store pre-session stats for +/- calculations
                 p['total_games_before_session'] = p['wins'] + p['losses']
                 p['active_this_date'] = False
                 p['s_w'], p['s_l'] = 0, 0
                 
-                # Check for inactivity
                 if p_id not in players_today:
                     p['missed_sessions'] += 1
-                    # Decay starts after 3 missed sessions
                     if p['missed_sessions'] > 3:
                         penalty = 50
-                        # Protection: Decay cannot drop a player below their seed MMR
                         starting_floor = 1500 if p_id in self.seeds else 1000
                         p['mmr'] = max(p['mmr'] - penalty, starting_floor)
+                        p['win_streak'] = 0 # Breaks streak
                         self.wealth_drift -= penalty
-                        
-                        # Add to the cumulative tracker for this run
                         decay_tracker[p_id] = decay_tracker.get(p_id, 0) + penalty
                 else:
-                    # Player is present today: Reset rust counter
                     p['missed_sessions'] = 0
 
             # --- SESSION LOGIC: GAME PROCESSING ---
@@ -486,7 +534,6 @@ class FaduMMREngine:
                 winners = [self._init_p(n) for n in game['W']]
                 losers = [self._init_p(n) for n in game['L']]
                 
-                # Determine the 'Elite' benchmark for the current pool
                 all_scores = [p['mmr'] for p in self.players.values()]
                 elite_thresh = np.percentile(all_scores, 80) if all_scores else 1500
 
@@ -506,6 +553,7 @@ class FaduMMREngine:
                     gap = max_opp_mmr - p['mmr']
                     if p['mmr'] < 1349 and gap >= 300:
                         bonus = min(gap * 0.25, 80)
+                        p['underdog_wins'] += 1 # STEP 2: Hall of Fame
                     
                     # 2. APPLY MMR GAIN
                     gain = 40 + bonus
@@ -513,6 +561,7 @@ class FaduMMREngine:
                     p['wins'] += 1
                     p['s_w'] += 1
                     p['win_streak'] += 1
+                    p['max_streak'] = max(p['max_streak'], p['win_streak']) # STEP 2: Hall of Fame
                     p['peak'] = max(p['peak'], p['mmr'])
                     p['t_opp'] += (sum(opps) / 2)
                     p['t_p_delta'] += (self.players[winners[1-i]]['mmr'] - p['mmr'])
@@ -528,19 +577,13 @@ class FaduMMREngine:
                         l['active_this_date'] = True
                         l['is_new_debut'] = True if (is_last_date and l.get('total_games_before_session', 0) == 0) else False
                     
-                    # 1. ROOKIE SHIELD (-10 instead of -20 for first 5 games)
                     loss = 10 if (l['wins'] + l['losses']) < config.ROOKIE_SHIELD_GAMES else 20
-                    
-                    # 2. GUARDIAN SHIELD (Elite Mitigation)
                     is_elite_game = l['mmr'] >= elite_thresh or partner['mmr'] >= elite_thresh
                     mmr_gap = abs(l['mmr'] - partner['mmr'])
                     if is_elite_game and mmr_gap >= config.GUARDIAN_SHIELD_THRESHOLD:
                         loss = 16
                     
-                    # 3. APPLY MMR LOSS
                     l['mmr'] -= loss
-                    
-                    # 4. LEGACY FLOOR (Mythic 2300 Peak ensures 1900 floor)
                     if l['peak'] >= config.LEGACY_FLOOR_PEAK: 
                         l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
                     
@@ -551,7 +594,6 @@ class FaduMMREngine:
                     l['t_p_delta'] += (partner['mmr'] - l['mmr'])
                     self.wealth_drift -= loss
 
-        # Final return includes the leaderboard table, latest date, wealth drift, and decay report
         decay_report = []
         for p_id, total_penalty in decay_tracker.items():
             decay_report.append({
@@ -575,6 +617,7 @@ class FaduMMREngine:
                 'wins': 0, 'losses': 0, 't_opp': 0, 't_p_delta': 0, 
                 'mmr_start_of_day': start_mmr, 's_w': 0, 's_l': 0, 
                 'active_this_date': False, 'win_streak': 0, 
+                'max_streak': 0, 'underdog_wins': 0, # Hall of Fame Tracking
                 'total_games_before_session': 0, 'is_new_debut': False, 
                 'missed_sessions': 0
             }
@@ -583,7 +626,7 @@ class FaduMMREngine:
     def _build_table(self, thresh):
         """
         Compiles the master dataframe for UI display.
-        This method includes the hidden columns used for sidebar filtering.
+        Includes STEP 2 and STEP 3 columns (Archetype, Streaks).
         """
         res = []
         for p in self.players.values():
@@ -591,16 +634,22 @@ class FaduMMREngine:
             if total == 0:
                 continue
             
-            # Prepare result dictionary for the DataFrame
+            # Derived Stats for Archetype logic
+            apd = round(p['t_p_delta'] / total)
+            aod = round(p['t_opp'] / total)
+            
             res.append({
                 "Rank": 0, 
                 "Player": p['name'], 
+                "Archetype": self._determine_archetype(p, apd, aod, total), # STEP 3
                 "Tier": self.get_tier(p['mmr']), 
                 "MMR": int(round(p['mmr'])), 
                 "Peak": int(round(p['peak'])), 
+                "Max Streak": p['max_streak'], # STEP 2
+                "Underdog Wins": p['underdog_wins'], # STEP 2
                 "+/-": int(round(p['mmr'] - p['mmr_start_of_day'])) if p['active_this_date'] else 0, 
-                "AOD": round(p['t_opp'] / total), 
-                "APD": round(p['t_p_delta'] / total), 
+                "AOD": aod, 
+                "APD": apd, 
                 "Status": "Elite" if p['mmr'] >= thresh else "Stable", 
                 "Confidence": "⭐⭐⭐" if total > 15 else "⭐⭐" if total > 5 else "⭐", 
                 "Last Session": f"{p['s_w']}-{p['s_l']} ", 
@@ -608,17 +657,14 @@ class FaduMMREngine:
                 "Remarks": "", 
                 "w_sort": p['wins'], 
                 "key": p['name'].lower(),
-                # --- INTERNAL UI COLUMNS (V1.2.0) ---
                 "Total_Games": total, 
                 "Missed_Sessions": p['missed_sessions'],
                 "Is_Present": p['active_this_date']
             })
             
-        # Final sort and ranking assignment
         df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
         df['Rank'] = range(1, len(df) + 1)
         
-        # Populate Remarks based on final rankings
         for i, row in df.iterrows():
             player_object = self.players[row['key']]
             df.at[i, "Remarks"] = self._generate_remark(player_object, row['APD'], row['AOD'], row['Rank'])
