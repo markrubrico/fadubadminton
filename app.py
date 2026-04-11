@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.0 - Community Edition Launch
+# Milestone: v5.1.2 - Social Softener & Metadata Update
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.0",
+    page_title="Fadu & Friends Portal v5.1.2",
     page_icon="🏸",
     layout="wide"
 )
@@ -28,9 +28,9 @@ def fetch_public_data():
         lb_df = pd.read_csv(reg_url)
         hist_df = pd.read_csv(hist_url)
         
-        # Reconstruct the raw multi-line log string from the Match_History sheet.
-        # This allows the engine to perform Synergy/Stamina analysis on public data.
-        raw_history = "\n".join(hist_df.iloc[:, 0].astype(str).tolist())
+        # Clean history logs for the engine: Drop NaNs and reconstruct
+        valid_logs = hist_df.iloc[:, 0].dropna().astype(str).tolist()
+        raw_history = "\n".join(valid_logs)
         return lb_df, raw_history
     except Exception:
         return None, None
@@ -40,8 +40,7 @@ with st.sidebar:
     st.title("🏸 Fadu Ops")
     
     # 🔐 ADMIN ACCESS GATE
-    # This is the "Conditional View" trigger.
-    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to unlock Commissioner Console.")
+    ops_key = st.text_input("Admin Access Key", type="password", help="Unlock Commissioner Console.")
     is_admin = (ops_key == st.secrets.get("OPS_PASSWORD", "fadu2026"))
     
     if is_admin:
@@ -50,7 +49,7 @@ with st.sidebar:
         
         st.divider()
         
-        # Admin-Only Connection Indicators (Hidden from players for clean UX)
+        # Admin-Only Connection Indicators
         if "BRIDGE_URL" in st.secrets:
             st.success("Registry: 🟢 Online")
         else:
@@ -95,11 +94,11 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.0 | Community Edition")
+    st.caption("v5.1.2 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
-# The nudge only appears for players to guide them on mobile UI.
+# Fixed UI: Clear instruction for mobile users
 if not is_admin:
     st.info("👈 **Mobile Users:** Tap the arrow in the top-left to filter rankings or access player profiles.")
 
@@ -136,19 +135,25 @@ if is_admin:
                 with st.spinner("Syncing Major Update..."):
                     engine = FaduMMREngine()
                     df, last_date, drift, decayed = engine.simulate(input_area)
-                    st.session_state.lb, st.session_state.drift = df, drift
-                    st.session_state.date, st.session_state.decayed = last_date, decayed 
+                    
+                    # Store variables safely in state
+                    st.session_state.lb = df
+                    st.session_state.drift = drift
+                    st.session_state.date = last_date
+                    st.session_state.decayed = decayed 
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
+                        # Payload 1: Leaderboard
                         payload_lb = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
+                        # Payload 2: Raw Logs
                         log_lines = [[line] for line in input_area.split('\n')]
                         payload_hist = {"target": "Match_History", "headers": ["Raw_Logs"], "values": log_lines}
                         
                         try:
                             requests.post(st.secrets["BRIDGE_URL"], json=payload_lb, timeout=20)
                             requests.post(st.secrets["BRIDGE_URL"], json=payload_hist, timeout=20)
-                            st.success("🎉 Global Registry & Match History Updated!")
+                            st.success("🎉 Global Registry & History Updated!")
                             st.cache_data.clear()
                         except:
                             st.error("Sync Failed")
@@ -164,8 +169,10 @@ st.title("🏆 Fadu & Friends: Fun Community Rankings")
 # Source of Truth routing
 if is_admin and 'lb' in st.session_state:
     display_lb, display_logs = st.session_state.lb, st.session_state.get('admin_logs', "")
+    session_date = st.session_state.get('date', "Latest")
 else:
     display_lb, display_logs = public_lb, public_logs
+    session_date = "Public View" # Fallback label
 
 if display_lb is not None:
     # --- HEATMAP DECAY ALERT ---
@@ -178,7 +185,8 @@ if display_lb is not None:
 
     # --- TAB 1: HALL OF FAME & LEADERBOARD ---
     with tab1:
-        st.subheader("🌟 Session Highlights")
+        # Added Session Date for context
+        st.subheader(f"🌟 Session Highlights ({session_date})")
         h1, h2, h3, h4 = st.columns(4)
         
         # 🟢 MVP Logic (+/-)
@@ -194,7 +202,9 @@ if display_lb is not None:
         # 🟢 Iron Man Logic (Games Played Today)
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
-                try: return sum([int(i) for i in str(val).split('-')])
+                try: 
+                    if pd.isna(val) or str(val).strip() == "": return 0
+                    return sum([int(i) for i in str(val).split('-')])
                 except: return 0
             display_lb['Total_Today'] = display_lb['Last Session'].apply(calc_total)
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
@@ -205,16 +215,21 @@ if display_lb is not None:
 
         st.divider()
         
-        # FIXED: .get() prevents AttributeError when admin hasn't run calculate yet
+        # Fixed: .get() prevents AttributeError
         if is_admin: 
             st.metric("Session Wealth Drift", f"{st.session_state.get('drift', 0)} MMR")
         
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
-        if hide_inactive: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
-        if hide_rookies: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
-        if show_present_only: df_disp = df_disp[df_disp['Is_Present'] == True]
+        
+        # Sidebar Sync Filters
+        if hide_inactive and 'Missed_Sessions' in df_disp.columns:
+            df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_rookies and 'Total_Games' in df_disp.columns:
+            df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
+        if show_present_only and 'Is_Present' in df_disp.columns:
+            df_disp = df_disp[df_disp['Is_Present'] == True]
         
         # Final column pruning for public view
         final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
@@ -222,16 +237,17 @@ if display_lb is not None:
 
     # --- TAB 2: COMBAT & PROGRESSION ---
     with tab2:
-        player_list = sorted(display_lb['Player'].tolist())
+        # Fixed: Normalize player list
+        player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
         st.divider()
         col_p1, col_p2 = st.columns(2)
         engine = FaduMMREngine()
         
         with col_p1:
-            # 🟢 TIER PROGRESSION (Road to Mythic)
+            # 🟢 TIER PROGRESSION
             st.subheader("🛡️ Road to Mythic")
-            current_mmr = display_lb.loc[display_lb['Player'] == hero, 'MMR'].values[0]
+            current_mmr = display_lb.loc[display_lb['Player'].str.strip() == hero, 'MMR'].values[0]
             
             tiers = [("Master", 1000), ("Grandmaster", 1500), ("Epic", 1900), 
                      ("Legend", 2300), ("Mythic", 2700), ("Mythic Glory", 3200)]
@@ -243,7 +259,6 @@ if display_lb is not None:
                     next_tier, next_mmr = name, val
                     break
             
-            # Progress calculation logic
             floor_mmr = tiers[[t[0] for t in tiers].index(curr_tier)][1]
             prog = (current_mmr - floor_mmr) / (next_mmr - floor_mmr)
             st.write(f"**Rank:** {curr_tier} | **Next Goal:** {next_tier}")
@@ -252,42 +267,37 @@ if display_lb is not None:
 
             st.divider()
             
-            # 🟢 RIVALRY RADAR (Fix applied: Column Guards)
+            # 📡 HARDENED RIVALRY RADAR (v5.1.1 Hardening)
             st.subheader("📡 Rivalry Radar")
-            riv_df = engine.get_rivalry_matrix(display_logs, hero)
-            if riv_df is not None and not riv_df.empty and 'Games' in riv_df.columns:
-                nemesis_df = riv_df[riv_df['Games'] >= 2].sort_values(by='Win%')
-                if not nemesis_df.empty:
-                    nem = nemesis_df.iloc[0]
-                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} (Win rate: {nem['Win%']}% over {int(nem['Games'])} games)")
-                else:
-                    st.caption("No Nemesis found (Min. 2 games required).")
+            if not display_logs or len(str(display_logs).strip()) < 5:
+                st.info("Insufficient Match History to generate a Radar.")
             else:
-                st.caption("Insufficient rivalry data.")
-            
-            # Synergy Radar
-            syn_df = engine.get_teammate_matrix(display_logs, hero)
-            if syn_df is not None and not syn_df.empty and 'Games' in syn_df.columns:
-                duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
-                if not duo_df.empty:
-                    duo = duo_df.iloc[0]
-                    st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win%']}% Win rate)")
+                riv_df = engine.get_rivalry_matrix(display_logs, hero)
+                if riv_df is not None and not riv_df.empty and 'Games' in riv_df.columns:
+                    nemesis_df = riv_df[riv_df['Games'] >= 2].sort_values(by='Win%')
+                    if not nemesis_df.empty:
+                        nem = nemesis_df.iloc[0]
+                        st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win%']}% Win Rate)")
+                    else:
+                        st.caption("No Nemesis found yet (Min. 2 games required).")
+                    
+                    syn_df = engine.get_teammate_matrix(display_logs, hero)
+                    if syn_df is not None and not syn_df.empty and 'Games' in syn_df.columns:
+                        duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
+                        if not duo_df.empty:
+                            duo = duo_df.iloc[0]
+                            st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win%']}% Win Rate)")
+                        else:
+                            st.caption("No Duo found yet.")
                 else:
-                    st.caption("No Dynamic Duo found.")
-            else:
-                st.caption("Insufficient synergy data.")
+                    st.caption("No Rivalry records found in current logs.")
 
         with col_p2:
             st.subheader("🔋 Stamina Analysis")
             if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
-            
-            st.divider()
-            st.subheader("📊 Opponent Career Matrix")
-            if st.button(f"Generate Career Rivals for {hero}", width='stretch'):
-                riv_full = engine.get_rivalry_matrix(display_logs, hero)
-                if riv_full is not None: st.dataframe(riv_full, width='stretch', hide_index=True)
+                else: st.warning("Not enough game sequence data found.")
             
             st.divider()
             st.subheader("⚔️ Head-to-Head")
@@ -300,11 +310,14 @@ if display_lb is not None:
 
     # --- TAB 3: FAQ ---
     with tab3:
-        st.subheader("📖 Community FAQ: How it Works")
+        st.subheader("📖 Community FAQ")
         
-        with st.expander("🤔 Why do we have an MMR system?"):
+        # 🟢 Social Softener Rewrite
+        with st.expander("🤔 Isn't 'ranking' our friends a bit too competitive?", expanded=True):
             st.write("""
-            The primary goal of this system is **Balanced & Fun Play**. MMR (Matchmaking Rating) is not a judgment—it's a tool to help ensure everyone gets competitive games where either side has a fair chance to win.
+            **Actually, it’s about game night quality!** We’ve all played in matches where the teams were so lopsided that nobody had fun—the winners felt bad, and the losers felt frustrated. This MMR system is just a tool to help ensure everyone gets competitive games where **either side has a fair chance to win.**
+            
+            Think of it as **Quality Assurance**: By knowing everyone's current form, we can ensure longer rallies, more sweat, and closer scores. It's not about being 'better' than your friends; it's about making sure your friends have a better time on the court!
             """)
             
         with st.expander("🧮 How is the math calculated?"):
@@ -312,18 +325,13 @@ if display_lb is not None:
             We use a modified **Elo Rating System**. 
             - Winning against a higher-ranked team grants more points.
             - Losing to a lower-ranked team results in a larger point loss.
-            - **Underdog Bonus:** If you face a significantly stronger team, you gain a +5 bonus just for the challenge!
+            - **Underdog Bonus:** If you face a significantly stronger team, you gain a +5 bonus just for the challenge, regardless of the outcome!
             """)
             
         with st.expander("🛡️ What is a Rookie Shield?"):
             st.write(f"""
             New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
-            During this phase, you can gain MMR, but you cannot lose it. This helps the system find your true rank without the initial stress of ranking down.
-            """)
-            
-        with st.expander("🔥 What is MMR Decay?"):
-            st.write("""
-            To keep the leaderboard active and fair, missing **3 or more consecutive sessions** results in 'Decay' (-50 points). This ensures that the rankings always reflect active players.
+            During this phase, you can gain MMR, but you cannot lose it. This helps the system find your true rank without the initial stress of ranking down while you're warming up.
             """)
             
         with st.expander("💠 What are the Tiers?"):
@@ -340,4 +348,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.0 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.1.2 | Fadu & Friends Community Rankings | Manila 2026")
