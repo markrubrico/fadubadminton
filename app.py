@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.4.4 - Date Precision & Tooltip Restoration
+# Milestone: v5.4.6 - Type-Safety & Player Recovery (ug Fix)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.4.4",
+    page_title="Fadu & Friends Portal v5.4.6",
     page_icon="🏸",
     layout="wide"
 )
@@ -25,8 +25,15 @@ def fetch_public_data():
         if not reg_url or not hist_url:
             return None, None
         
-        # Pull the current Leaderboard
+        # TYPE-SAFETY: Force 'Player' to string to prevent 'ug' disappearing.
+        # Force APD/AOD to numeric to override Google Sheets date formatting.
         lb_df = pd.read_csv(reg_url)
+        lb_df['Player'] = lb_df['Player'].astype(str)
+        
+        # Convert numeric columns safely, coercing errors (like date strings) to NaN
+        for col in ["APD", "AOD", "MMR", "Peak", "+/-"]:
+            if col in lb_df.columns:
+                lb_df[col] = pd.to_numeric(lb_df[col], errors='coerce').fillna(0)
         
         # Pull the Raw Match Logs
         hist_df = pd.read_csv(hist_url)
@@ -100,7 +107,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.4.4 | Community Edition")
+    st.caption("v5.4.6 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -198,8 +205,9 @@ if display_lb is not None:
             h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR", help="Highest MMR gain in the latest session.")
             
         if 'APD' in display_lb.columns:
-            carry_row = display_lb.loc[display_lb['APD'].idxmax()]
-            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", help="Average Partner Delta: Shows impact relative to partner's skill.")
+            # Fix: Identify the carry (lowest APD)
+            carry_row = display_lb.loc[display_lb['APD'].idxmin()]
+            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Average Partner Delta: Negative values indicate carrying partners.")
 
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
@@ -219,7 +227,7 @@ if display_lb is not None:
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        if hide_inactive and 'Missed_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_inactive and 'Miss_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
         if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
@@ -360,10 +368,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v5.4.4 Archetypes use calibrated thresholds for the current league meta.")
+        st.info("💡 **Note:** v5.4.6 Archetypes use calibrated thresholds for the current league meta.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.4.4 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.4.6 | Fadu & Friends Community Rankings | Manila 2026")
