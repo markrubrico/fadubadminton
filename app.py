@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.4.3 - Rankings Restoration & Hero Card Migration
+# Milestone: v5.4.4 - Date Precision & Tooltip Restoration
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.4.3",
+    page_title="Fadu & Friends Portal v5.4.4",
     page_icon="🏸",
     layout="wide"
 )
@@ -100,7 +100,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.4.3 | Community Edition")
+    st.caption("v5.4.4 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -166,16 +166,17 @@ if is_admin:
 st.divider()
 st.markdown("### 🏆 Fadu & Friends: Community Rankings")
 
-# Source of Truth routing
+# DYNAMIC DATE DETECTION
 if is_admin and 'lb' in st.session_state:
     display_lb, display_logs = st.session_state.lb, st.session_state.get('admin_logs', "")
     session_date = st.session_state.get('date', "Latest")
 else:
     display_lb, display_logs = public_lb, public_logs
-    if display_logs and len(display_logs) > 10:
-        lines = display_logs.split('\n')
-        date_lines = [l for l in lines if '-' in l and len(l) < 15]
-        session_date = date_lines[0] if date_lines else "Cloud Sync"
+    if display_logs:
+        import re
+        # Find all date patterns (e.g., 11-Apr) and pick the last one
+        all_dates = re.findall(r'^(\d{1,2}-[A-Za-z]+)', display_logs, re.MULTILINE)
+        session_date = all_dates[-1] if all_dates else "Latest Session"
     else:
         session_date = "Cloud Sync"
 
@@ -194,11 +195,11 @@ if display_lb is not None:
         
         if '+/-' in display_lb.columns:
             mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
-            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR")
+            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR", help="Highest MMR gain in the latest session.")
             
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
-            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD")
+            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", help="Average Partner Delta: Shows impact relative to partner's skill.")
 
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
@@ -208,7 +209,7 @@ if display_lb is not None:
                 except: return 0
             display_lb['Total_Today'] = display_lb['Last Session'].apply(calc_total)
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
-            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games")
+            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games", help="Most games played in the latest session.")
         
         if 'MMR' in display_lb.columns:
             h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
@@ -222,14 +223,25 @@ if display_lb is not None:
         if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
-        # RESTORED: THE ORIGINAL 13 COLUMNS DISPLAY
+        # RESTORED: THE ORIGINAL 13 COLUMNS DISPLAY WITH TOOLTIPS
         original_13 = [
             "Rank", "Player", "Tier", "MMR", "Peak", "+/-", 
             "AOD", "APD", "Status", "Confidence", 
             "Last Session", "Season Record", "Remarks"
         ]
         final_cols = [c for c in original_13 if c in df_disp.columns]
-        st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
+        
+        st.dataframe(
+            df_disp[final_cols], 
+            width='stretch', 
+            hide_index=True,
+            column_config={
+                "AOD": st.column_config.NumberColumn("AOD", help="Average Opponent Difficulty: Strength of your rivals."),
+                "APD": st.column_config.NumberColumn("APD", help="Average Partner Delta: Your impact relative to your partner."),
+                "Confidence": st.column_config.TextColumn("Confidence", help="Rating reliability based on games played."),
+                "Remarks": st.column_config.TextColumn("Remarks", width="large")
+            }
+        )
 
     # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
@@ -249,8 +261,8 @@ if display_lb is not None:
             st.markdown("#### 🏛️ Hall of Fame")
             f1, f2, f3, f4 = st.columns(4)
             f1.metric("🏆 All-Time Peak", f"{int(hero_row['Peak'].values[0])} MMR")
-            f2.metric("🔥 Max Win Streak", f"{int(hero_row['Max Streak'].values[0])} Games")
-            f3.metric("⚔️ Giants Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Victories vs 300+ MMR gaps.")
+            f2.metric("🔥 Max Win Streak", f"{int(hero_row['Max Streak'].values[0])} Games", help="Longest career winning streak.")
+            f3.metric("⚔️ Giants Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Wins against opponents with a 300+ MMR advantage.")
             f4.metric("📈 Season Record", hero_row['Season Record'].values[0])
 
         st.divider()
@@ -348,10 +360,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v5.4.3 Archetypes use calibrated thresholds for the current league meta.")
+        st.info("💡 **Note:** v5.4.4 Archetypes use calibrated thresholds for the current league meta.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.4.3 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.4.4 | Fadu & Friends Community Rankings | Manila 2026")
