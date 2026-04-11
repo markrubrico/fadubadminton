@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.2.1 - FAQ Logic Refinement & System Transparency
+# Milestone: v5.3.0 - Career Ledger & History Visuals
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.2.1",
+    page_title="Fadu & Friends Portal v5.3.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.2.1 | Community Edition")
+    st.caption("v5.3.0 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -164,7 +164,6 @@ if is_admin:
 
 # --- 6. PLAYER HUB ---
 st.divider()
-# UI Update: Downsized Main Title
 st.markdown("### 🏆 Fadu & Friends: Fun Community Rankings")
 
 # Source of Truth routing
@@ -181,25 +180,21 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    # UI Update: Clean Tab Labels
+    # Tab Labels
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 
     # --- TAB 1: RANKINGS ---
     with tab1:
-        # UI Update: Downsized Session Highlights header
         st.markdown(f"###### 🌟 Session Highlights ({session_date})")
         h1, h2, h3, h4 = st.columns(4)
         
         if '+/-' in display_lb.columns:
             mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
-            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR", 
-                      help="The player who gained the most MMR during the last session.")
+            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR", help="Highest MMR gain this session.")
             
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
-            # Logic Update: APD redefined as Average Partner Delta
-            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", 
-                      help="Average Partner Delta: Measures performance relative to the partners assigned, showing who elevates their game regardless of teammate rank.")
+            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", help="Average Partner Delta: Who elevates their partners most.")
 
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
@@ -209,12 +204,10 @@ if display_lb is not None:
                 except: return 0
             display_lb['Total_Today'] = display_lb['Last Session'].apply(calc_total)
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
-            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games", 
-                      help="The player who played the most total games in the last session.")
+            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games", help="Most games played today.")
         
         if 'MMR' in display_lb.columns:
-            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced", 
-                      help="The average MMR score across the entire community roster.")
+            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced", help="Average community MMR.")
 
         st.divider()
         if is_admin: 
@@ -244,7 +237,7 @@ if display_lb is not None:
         syn_df = engine.get_teammate_matrix(display_logs, hero)
         
         with col_p1:
-            st.subheader("🛡️ Road to Mythic", help="Tracks your progression through the competitive tiers based on current MMR.")
+            st.subheader("🛡️ Road to Mythic")
             hero_data = display_lb.loc[display_lb['Player'].str.strip() == hero]
             if not hero_data.empty:
                 current_mmr = hero_data['MMR'].values[0]
@@ -262,8 +255,7 @@ if display_lb is not None:
                 st.caption(f"🚀 **{int(next_mmr - current_mmr)} MMR** needed for promotion.")
 
             st.divider()
-            
-            st.subheader("📡 Rivalry Radar", help="Surfaces your 'Nemesis'—the opponent with the lowest win rate against you (min. 2 games).")
+            st.subheader("📡 Rivalry Radar")
             if riv_df is not None and not riv_df.empty and 'Total' in riv_df.columns:
                 riv_df['WR_Num'] = riv_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
                 nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['WR_Num', 'Total'], ascending=[True, False])
@@ -271,19 +263,17 @@ if display_lb is not None:
                     nem = nemesis_df.iloc[0]
                     st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']}% Win Rate)")
                 else: st.caption("No Nemesis found yet (Min. 2 games required).")
-            else: st.caption("No rivalry records found for this player.")
+            else: st.caption("No rivalry records found.")
 
             st.divider()
-
-            st.subheader("🤝 Teammate Radar", help="Identifies your 'Dynamic Duo'—the partner with whom you share the highest win rate (min. 2 games).")
+            st.subheader("🤝 Teammate Radar")
             if syn_df is not None and not syn_df.empty and 'Total Games' in syn_df.columns:
                 syn_df['WR_Num'] = syn_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
                 duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['WR_Num', 'Total Games'], ascending=[False, False])
                 if not duo_df.empty:
                     duo = duo_df.iloc[0]
                     st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']}% Win Rate)")
-                else: st.caption("No Duo found yet (Min. 2 games required).")
-            else: st.caption("No teammate records found for this player.")
+                else: st.caption("No Duo found yet.")
 
         with col_p2:
             st.subheader("📊 Deep Analytics")
@@ -304,23 +294,37 @@ if display_lb is not None:
                     st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
                     st.table(pd.DataFrame(h2h["matches"]))
 
+        # --- NEW: CAREER LEDGER SECTION ---
+        st.divider()
+        st.subheader("📜 Career Ledger & Performance History")
+        hist_df = engine.get_player_history(display_logs, hero)
+        
+        if hist_df is not None and not hist_df.empty:
+            # Show a line chart of MMR Balance over time
+            # We reverse the DF to chronological for the chart
+            chart_data = hist_df.iloc[::-1].copy()
+            st.line_chart(chart_data['Balance'], use_container_width=True)
+            
+            # Show the detailed ledger table
+            st.dataframe(hist_df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No match history found for this player yet.")
+
     # --- TAB 3: FAQ ---
     with tab3:
         st.subheader("📖 FAQ")
         with st.expander("🤔 Isn't 'ranking' our friends a bit too competitive?", expanded=True):
             st.write("""
-            **Actually, it’s about game night quality!** The MMR system ensures competitive games where **either side has a fair chance to win.** By knowing form, we ensure closer scores and longer rallies. It's about everyone having a better time on the court!
+            **Actually, it’s about game night quality!** The MMR system ensures competitive games where **either side has a fair chance to win.**
             """)
         with st.expander("🧮 How is the math calculated?"):
             st.write("""
-            We use a **Modified Elo Rating System** tuned for community doubles:
-            - **Opponent Strength:** Beating a team with a higher average MMR yields a larger gain. Losing to a lower-ranked team results in a larger penalty.
-            - **The Underdog Bonus (+5):** This is a flat incentive added to your session total if your team's average MMR was significantly lower than your opponents' (calculated via a parity threshold), regardless of the match result. It rewards the effort of taking on the league's top players!
+            We use a **Modified Elo Rating System** tuned for community doubles.
             """)
         with st.expander("🛡️ What is a Rookie Shield?"):
             st.write(f"""
             New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
-            During this phase, you can gain MMR for wins to find your true rank, but you cannot lose it. Your score will either move up or stay flat at your **Starting Baseline** until your {config.ROOKIE_SHIELD_GAMES + 1}th game.
+            During this phase, you can gain MMR for wins to find your true rank, but you **lose minimally** (-10 MMR instead of -20) on losses to protect your initial climb until your {config.ROOKIE_SHIELD_GAMES + 1}th game.
             
             **Starting Baselines:**
             - **Veteran Seeds:** 1500 MMR
@@ -334,10 +338,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** This system is a work in progress. If you spot any data errors or have suggestions for the engine, kindly message **Fadu** so we can refine the math!")
+        st.info("💡 **Note:** This system is a work in progress. Message **Fadu** if you spot errors!")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.2.1 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.3.0 | Fadu & Friends Community Rankings | Manila 2026")

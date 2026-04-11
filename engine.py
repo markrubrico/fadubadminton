@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.2.8
+    Fadu MMR Engine v1.3.0
     ----------------------
     This document serves as the deterministic logic core for the Fadu Badminton 
     Power Rankings. It implements the following Master Specification v4.4 rules:
@@ -19,6 +19,7 @@ class FaduMMREngine:
     7. UNDERDOG INJECTION: Lambda-weighted bonuses for high-MMR upset victories.
     8. LEGACY FLOOR: 2300 Peak ensures a 1900 MMR hard-floor protection for veterans.
     9. UI FILTERING: Internal keys for 'Total Games', 'Missed Sessions', and 'Is_Present'.
+    10. NEW: CAREER LEDGER: Snapshots match-by-match MMR deltas for auditing.
     """
 
     def __init__(self):
@@ -81,6 +82,131 @@ class FaduMMREngine:
             
         return "Pure Hustle. Consistent force."
 
+    # --- NEW: PLAYER HISTORY LEDGER LOGIC (v1.3.0) ---
+    def get_player_history(self, text, target_player):
+        """
+        Performs a full chronological replay of the league history but filters 
+        the output to a single player's perspective. 
+        
+        This is a 'High-Fidelity' audit trail—it recalculates the entire league 
+        step-by-step to ensure Guardian Shields and Underdog bonuses are 
+        calculated with the correct context of that specific moment in time.
+        """
+        if not target_player or not text.strip():
+            return None
+            
+        target_id = self.clean_name(target_player).lower()
+        logs = self._parse_to_list(text)
+        if not logs:
+            return None
+        
+        # Reset local simulation state for replay
+        replay_players = {}
+        ledger = []
+        
+        def init_replay_p(name):
+            n = self.clean_name(name).lower()
+            if n not in replay_players:
+                start_mmr = 1500 if n in self.seeds else 1000
+                replay_players[n] = {
+                    'name': name.strip(), 'mmr': start_mmr, 'peak': start_mmr, 
+                    'wins': 0, 'losses': 0
+                }
+            return n
+
+        dates = list(dict.fromkeys([l['date'] for l in logs]))
+        
+        for d in dates:
+            session_games = [x for x in logs if x['date'] == d]
+            players_today = set()
+            for g in session_games:
+                players_today.update([self.clean_name(n).lower() for n in (g['W'] + g['L'])])
+            
+            # A. Off-Court Logic: Rust Decay
+            for p_id, p in replay_players.items():
+                if p_id not in players_today:
+                    p.setdefault('missed_sessions', 0)
+                    p['missed_sessions'] += 1
+                    if p['missed_sessions'] > 3:
+                        old_mmr = p['mmr']
+                        floor = 1500 if p_id in self.seeds else 1000
+                        p['mmr'] = max(p['mmr'] - 50, floor)
+                        
+                        # If the target is decaying, log it
+                        if p_id == target_id and (old_mmr - p['mmr']) > 0:
+                            ledger.append({
+                                "Date": d, "Match": "OFF-COURT", "Event": "📉 RUST DECAY",
+                                "Partner": "-", "Opponents": "Inactivity Penalty",
+                                "Result": "Penalty", "Delta": -50, "Balance": int(round(p['mmr']))
+                            })
+                else:
+                    p['missed_sessions'] = 0
+
+            # B. Match Logic Replay
+            for game in session_games:
+                winners = [init_replay_p(n) for n in game['W']]
+                losers = [init_replay_p(n) for n in game['L']]
+                
+                # Dynamic Elite Benchmark for this specific game
+                all_scores = [p['mmr'] for p in replay_players.values()]
+                elite_thresh = np.percentile(all_scores, 80) if all_scores else 1500
+                
+                # --- PROCESS WINNERS ---
+                for i, name in enumerate(winners):
+                    p = replay_players[name]
+                    opp_mmrs = [replay_players[l]['mmr'] for l in losers]
+                    
+                    bonus = 0
+                    max_opp = max(opp_mmrs)
+                    gap = max_opp - p['mmr']
+                    if p['mmr'] < 1349 and gap >= 300:
+                        bonus = min(gap * 0.25, 80)
+                    
+                    gain = 40 + bonus
+                    p['mmr'] += gain
+                    p['wins'] += 1
+                    p['peak'] = max(p['peak'], p['mmr'])
+                    
+                    if name == target_id:
+                        partner = [n for n in game['W'] if self.clean_name(n).lower() != target_id][0]
+                        opps = " / ".join(game['L'])
+                        ledger.append({
+                            "Date": d, "Match": f"Game {game.get('game_num', '?')}", 
+                            "Event": "Victory" if bonus == 0 else "🔥 Underdog Win",
+                            "Partner": partner, "Opponents": opps, "Result": "W",
+                            "Delta": f"+{int(gain)}", "Balance": int(round(p['mmr']))
+                        })
+
+                # --- PROCESS LOSERS ---
+                for i, name in enumerate(losers):
+                    l = replay_players[name]
+                    partner_obj = replay_players[losers[1-i]]
+                    
+                    loss = 10 if (l['wins'] + l['losses']) < config.ROOKIE_SHIELD_GAMES else 20
+                    is_elite = l['mmr'] >= elite_thresh or partner_obj['mmr'] >= elite_thresh
+                    gap = abs(l['mmr'] - partner_obj['mmr'])
+                    if is_elite and gap >= config.GUARDIAN_SHIELD_THRESHOLD:
+                        loss = 16
+                    
+                    l['mmr'] -= loss
+                    if l['peak'] >= config.LEGACY_FLOOR_PEAK:
+                        l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
+                    
+                    l['losses'] += 1
+                    
+                    if name == target_id:
+                        partner_name = [n for n in game['L'] if self.clean_name(n).lower() != target_id][0]
+                        opps = " / ".join(game['W'])
+                        ledger.append({
+                            "Date": d, "Match": f"Game {game.get('game_num', '?')}", 
+                            "Event": "Defeat" if loss == 20 else "🛡️ Shielded Loss",
+                            "Partner": partner_name, "Opponents": opps, "Result": "L",
+                            "Delta": f"-{int(loss)}", "Balance": int(round(l['mmr']))
+                        })
+
+        # Return latest first
+        return pd.DataFrame(ledger[::-1]) if ledger else None
+
     def get_stamina_analysis(self, text, target_player):
         """
         FIXED v1.2.8:
@@ -106,10 +232,14 @@ class FaduMMREngine:
             lk = [self.clean_name(n).lower() for n in game['L']]
             num = game.get('game_num', 1)
             
-            if num <= 5: phase = "Fresh (Games 1-5)"
-            elif num <= 10: phase = "Warm (Games 6-10)"
-            elif num <= 15: phase = "Peak (Games 11-15)"
-            else: phase = "Fatigued (Games 16+)"
+            if num <= 5: 
+                phase = "Fresh (Games 1-5)"
+            elif num <= 10: 
+                phase = "Warm (Games 6-10)"
+            elif num <= 15: 
+                phase = "Peak (Games 11-15)"
+            else: 
+                phase = "Fatigued (Games 16+)"
             
             if target in wk:
                 brackets[phase]["Wins"] += 1
