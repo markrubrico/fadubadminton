@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.8 - Sorting Fix, Tooltips & UI Enhancement
+# Milestone: v5.1.9 - Visual Polish & APD Definition Update
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.8",
+    page_title="Fadu & Friends Portal v5.1.9",
     page_icon="🏸",
     layout="wide"
 )
@@ -32,7 +32,6 @@ def fetch_public_data():
         hist_df = pd.read_csv(hist_url)
         
         # Reconstruct history logs correctly.
-        # Clean history logs: Drop NaNs and skip header strings if they exist.
         valid_logs = hist_df.iloc[:, 0].dropna().astype(str).tolist()
         if valid_logs and "Raw_Logs" in valid_logs[0]:
             valid_logs = valid_logs[1:]
@@ -101,7 +100,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.8 | Community Edition")
+    st.caption("v5.1.9 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -164,7 +163,8 @@ if is_admin:
 
 # --- 6. PLAYER HUB ---
 st.divider()
-st.title("🏆 Fadu & Friends: Fun Community Rankings")
+# Update: Smaller Main Title
+st.markdown("### 🏆 Fadu & Friends: Fun Community Rankings")
 
 # Source of Truth routing
 if is_admin and 'lb' in st.session_state:
@@ -180,18 +180,13 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    # --- HEATMAP DECAY ALERT ---
-    if is_admin and st.session_state.get('decayed'):
-        with st.expander("📉 Inactivity Decay Alert", expanded=True):
-            decay_df = pd.DataFrame(st.session_state.decayed)
-            st.dataframe(decay_df.style.map(lambda v: 'background-color: #c0392b; color: white' if v > 4 else 'background-color: #e67e22; color: white', subset=['Missed']), width='stretch', hide_index=True)
+    # Update: Separated Tab Labels without brackets
+    tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ & RULES"])
 
-    # UI Enhancement: More obvious labels
-    tab1, tab2, tab3 = st.tabs(["📊 [ RANKINGS ]", "⚔️ [ COMBAT & SYNERGY ]", "📖 [ FAQ & RULES ]"])
-
-    # --- TAB 1: HIGHLIGHTS & LEADERBOARD ---
+    # --- TAB 1: RANKINGS ---
     with tab1:
-        st.subheader(f"🌟 Session Highlights ({session_date})")
+        # Update: Smaller Highlights Header
+        st.markdown(f"##### 🌟 Session Highlights ({session_date})")
         h1, h2, h3, h4 = st.columns(4)
         
         if '+/-' in display_lb.columns:
@@ -201,8 +196,9 @@ if display_lb is not None:
             
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
+            # Update: APD definition in tooltip
             h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD", 
-                      help="Average Point Difference: The player who dominated their rallies the most on average.")
+                      help="Average Partner Delta: The player who dominated their rallies the most on average.")
 
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
@@ -234,7 +230,7 @@ if display_lb is not None:
         final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
-    # --- TAB 2: COMBAT & SYNERGY (v5.1.8 Alignment & Numeric Sorting) ---
+    # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
@@ -247,7 +243,6 @@ if display_lb is not None:
         syn_df = engine.get_teammate_matrix(display_logs, hero)
         
         with col_p1:
-            # 🛡️ TIER PROGRESSION
             st.subheader("🛡️ Road to Mythic", help="Tracks your progression through the competitive tiers based on current MMR.")
             hero_data = display_lb.loc[display_lb['Player'].str.strip() == hero]
             if not hero_data.empty:
@@ -267,10 +262,8 @@ if display_lb is not None:
 
             st.divider()
             
-            # 📡 RIVALRY RADAR (v5.1.8 Sorting Fix)
             st.subheader("📡 Rivalry Radar", help="Surfaces your 'Nemesis'—the opponent with the lowest win rate against you (min. 2 games).")
             if riv_df is not None and not riv_df.empty and 'Total' in riv_df.columns:
-                # v5.1.8 Fix: Convert Win Rate to numeric for accurate sorting (100 > 50)
                 riv_df['WR_Num'] = riv_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
                 nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['WR_Num', 'Total'], ascending=[True, False])
                 
@@ -282,10 +275,8 @@ if display_lb is not None:
 
             st.divider()
 
-            # 🤝 TEAMMATE RADAR (v5.1.8 Sorting Fix)
             st.subheader("🤝 Teammate Radar", help="Identifies your 'Dynamic Duo'—the partner with whom you share the highest win rate (min. 2 games).")
             if syn_df is not None and not syn_df.empty and 'Total Games' in syn_df.columns:
-                # v5.1.8 Fix: Convert Win Rate to numeric for accurate sorting
                 syn_df['WR_Num'] = syn_df['Win Rate'].astype(str).str.replace('%', '').astype(float)
                 duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['WR_Num', 'Total Games'], ascending=[False, False])
                 
@@ -344,4 +335,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.8 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.1.9 | Fadu & Friends Community Rankings | Manila 2026")
