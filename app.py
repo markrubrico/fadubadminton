@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.2 - Social Softener & Metadata Update
+# Milestone: v5.1.4 - Full Pipeline Integration & Synergy Restoration
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.2",
+    page_title="Fadu & Friends Portal v5.1.4",
     page_icon="🏸",
     layout="wide"
 )
@@ -25,12 +25,17 @@ def fetch_public_data():
         if not reg_url or not hist_url:
             return None, None
         
+        # Pull the current Leaderboard
         lb_df = pd.read_csv(reg_url)
+        
+        # Pull the Raw Match Logs
         hist_df = pd.read_csv(hist_url)
         
-        # Clean history logs for the engine: Drop NaNs and reconstruct
+        # v5.1.4 Fix: Reconstruct history logs correctly even in player mode.
+        # We drop NaNs and join the first column to feed the analytical engine.
         valid_logs = hist_df.iloc[:, 0].dropna().astype(str).tolist()
         raw_history = "\n".join(valid_logs)
+        
         return lb_df, raw_history
     except Exception:
         return None, None
@@ -94,11 +99,10 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.2 | Community Edition")
+    st.caption("v5.1.4 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
-# Fixed UI: Clear instruction for mobile users
 if not is_admin:
     st.info("👈 **Mobile Users:** Tap the arrow in the top-left to filter rankings or access player profiles.")
 
@@ -135,18 +139,12 @@ if is_admin:
                 with st.spinner("Syncing Major Update..."):
                     engine = FaduMMREngine()
                     df, last_date, drift, decayed = engine.simulate(input_area)
-                    
-                    # Store variables safely in state
-                    st.session_state.lb = df
-                    st.session_state.drift = drift
-                    st.session_state.date = last_date
-                    st.session_state.decayed = decayed 
+                    st.session_state.lb, st.session_state.drift = df, drift
+                    st.session_state.date, st.session_state.decayed = last_date, decayed 
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
-                        # Payload 1: Leaderboard
                         payload_lb = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
-                        # Payload 2: Raw Logs
                         log_lines = [[line] for line in input_area.split('\n')]
                         payload_hist = {"target": "Match_History", "headers": ["Raw_Logs"], "values": log_lines}
                         
@@ -172,7 +170,7 @@ if is_admin and 'lb' in st.session_state:
     session_date = st.session_state.get('date', "Latest")
 else:
     display_lb, display_logs = public_lb, public_logs
-    session_date = "Public View" # Fallback label
+    session_date = "Cloud Sync"
 
 if display_lb is not None:
     # --- HEATMAP DECAY ALERT ---
@@ -181,25 +179,21 @@ if display_lb is not None:
             decay_df = pd.DataFrame(st.session_state.decayed)
             st.dataframe(decay_df.style.map(lambda v: 'background-color: #c0392b; color: white' if v > 4 else 'background-color: #e67e22; color: white', subset=['Missed']), width='stretch', hide_index=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 Hall of Fame & Rankings", "⚔️ Combat & Progression", "📖 FAQ"])
+    tab1, tab2, tab3 = st.tabs(["📊 Highlights & Rankings", "⚔️ Combat & Synergy", "📖 FAQ"])
 
-    # --- TAB 1: HALL OF FAME & LEADERBOARD ---
+    # --- TAB 1: HIGHLIGHTS & LEADERBOARD ---
     with tab1:
-        # Added Session Date for context
         st.subheader(f"🌟 Session Highlights ({session_date})")
         h1, h2, h3, h4 = st.columns(4)
         
-        # 🟢 MVP Logic (+/-)
         if '+/-' in display_lb.columns:
             mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
             h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR")
             
-        # 🟢 Hard Carry Logic (APD)
         if 'APD' in display_lb.columns:
             carry_row = display_lb.loc[display_lb['APD'].idxmax()]
             h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{carry_row['APD']} APD")
 
-        # 🟢 Iron Man Logic (Games Played Today)
         if 'Last Session' in display_lb.columns:
             def calc_total(val):
                 try: 
@@ -210,12 +204,9 @@ if display_lb is not None:
             iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
             h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games")
         
-        if 'MMR' in display_lb.columns:
-            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
+        h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
 
         st.divider()
-        
-        # Fixed: .get() prevents AttributeError
         if is_admin: 
             st.metric("Session Wealth Drift", f"{st.session_state.get('drift', 0)} MMR")
         
@@ -223,21 +214,16 @@ if display_lb is not None:
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        # Sidebar Sync Filters
-        if hide_inactive and 'Missed_Sessions' in df_disp.columns:
-            df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
-        if hide_rookies and 'Total_Games' in df_disp.columns:
-            df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
-        if show_present_only and 'Is_Present' in df_disp.columns:
-            df_disp = df_disp[df_disp['Is_Present'] == True]
+        if hide_inactive and 'Missed_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
+        if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
-        # Final column pruning for public view
         final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
-    # --- TAB 2: COMBAT & PROGRESSION ---
+    # --- TAB 2: COMBAT & SYNERGY (v5.1.4 Restoration) ---
     with tab2:
-        # Fixed: Normalize player list
+        # Normalize player names from Registry
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
         st.divider()
@@ -247,29 +233,27 @@ if display_lb is not None:
         with col_p1:
             # 🟢 TIER PROGRESSION
             st.subheader("🛡️ Road to Mythic")
-            current_mmr = display_lb.loc[display_lb['Player'].str.strip() == hero, 'MMR'].values[0]
-            
-            tiers = [("Master", 1000), ("Grandmaster", 1500), ("Epic", 1900), 
-                     ("Legend", 2300), ("Mythic", 2700), ("Mythic Glory", 3200)]
-            
-            curr_tier, next_tier, next_mmr = "Master", "Grandmaster", 1500
-            for name, val in tiers:
-                if current_mmr >= val: curr_tier = name
-                else: 
-                    next_tier, next_mmr = name, val
-                    break
-            
-            floor_mmr = tiers[[t[0] for t in tiers].index(curr_tier)][1]
-            prog = (current_mmr - floor_mmr) / (next_mmr - floor_mmr)
-            st.write(f"**Rank:** {curr_tier} | **Next Goal:** {next_tier}")
-            st.progress(min(max(prog, 0.0), 1.0))
-            st.caption(f"🚀 **{int(next_mmr - current_mmr)} MMR** needed for promotion.")
+            hero_data = display_lb.loc[display_lb['Player'].str.strip() == hero]
+            if not hero_data.empty:
+                current_mmr = hero_data['MMR'].values[0]
+                tiers = [("Master", 1000), ("Grandmaster", 1500), ("Epic", 1900), 
+                         ("Legend", 2300), ("Mythic", 2700), ("Mythic Glory", 3200)]
+                curr_tier, next_tier, next_mmr = "Master", "Grandmaster", 1500
+                for name, val in tiers:
+                    if current_mmr >= val: curr_tier = name
+                    else: next_tier, next_mmr = name, val; break
+                
+                floor_mmr = tiers[[t[0] for t in tiers].index(curr_tier)][1]
+                prog = (current_mmr - floor_mmr) / (next_mmr - floor_mmr)
+                st.write(f"**Rank:** {curr_tier} | **Next Goal:** {next_tier}")
+                st.progress(min(max(prog, 0.0), 1.0))
+                st.caption(f"🚀 **{int(next_mmr - current_mmr)} MMR** needed for promotion.")
 
             st.divider()
             
-            # 📡 HARDENED RIVALRY RADAR (v5.1.1 Hardening)
+            # 📡 HARDENED RIVALRY RADAR (Decoupled)
             st.subheader("📡 Rivalry Radar")
-            if not display_logs or len(str(display_logs).strip()) < 5:
+            if not display_logs or len(str(display_logs).strip()) < 10:
                 st.info("Insufficient Match History to generate a Radar.")
             else:
                 riv_df = engine.get_rivalry_matrix(display_logs, hero)
@@ -278,30 +262,48 @@ if display_lb is not None:
                     if not nemesis_df.empty:
                         nem = nemesis_df.iloc[0]
                         st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win%']}% Win Rate)")
-                    else:
-                        st.caption("No Nemesis found yet (Min. 2 games required).")
-                    
-                    syn_df = engine.get_teammate_matrix(display_logs, hero)
-                    if syn_df is not None and not syn_df.empty and 'Games' in syn_df.columns:
-                        duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
-                        if not duo_df.empty:
-                            duo = duo_df.iloc[0]
-                            st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win%']}% Win Rate)")
-                        else:
-                            st.caption("No Duo found yet.")
-                else:
-                    st.caption("No Rivalry records found in current logs.")
+                    else: st.caption("No Nemesis found yet (Min. 2 games required).")
+                else: st.caption("No rivalry records found for this player.")
+
+            st.divider()
+
+            # 🤝 TEAMMATE SYNERGY RADAR (Decoupled)
+            st.subheader("🤝 Teammate Radar")
+            if not display_logs or len(str(display_logs).strip()) < 10:
+                st.info("Insufficient Match History to scan synergy.")
+            else:
+                syn_df = engine.get_teammate_matrix(display_logs, hero)
+                if syn_df is not None and not syn_df.empty and 'Games' in syn_df.columns:
+                    duo_df = syn_df[syn_df['Games'] >= 2].sort_values(by='Win%', ascending=False)
+                    if not duo_df.empty:
+                        duo = duo_df.iloc[0]
+                        st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win%']}% Win Rate)")
+                    else: st.caption("No Duo found yet (Min. 2 games required).")
+                else: st.caption("No teammate records found for this player.")
 
         with col_p2:
-            st.subheader("🔋 Stamina Analysis")
+            st.subheader("📊 Deep Analytics")
+            
+            # Feature: Teammate Matrix (Restored)
+            if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
+                syn_full = engine.get_teammate_matrix(display_logs, hero)
+                if syn_full is not None: st.dataframe(syn_full, width='stretch', hide_index=True)
+                else: st.warning("No teammate data available.")
+
+            # Feature: Career Rivals
+            if st.button(f"Generate Career Rivals for {hero}", width='stretch'):
+                riv_full = engine.get_rivalry_matrix(display_logs, hero)
+                if riv_full is not None: st.dataframe(riv_full, width='stretch', hide_index=True)
+                else: st.warning("No rivalry data available.")
+
+            # Feature: Fatigue Analysis
             if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
-                else: st.warning("Not enough game sequence data found.")
             
             st.divider()
-            st.subheader("⚔️ Head-to-Head")
-            rival = st.selectbox("Compare vs Rival:", player_list)
+            st.subheader("⚔️ Direct Head-to-Head")
+            rival = st.selectbox("Compare against specific Rival:", player_list)
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
                 if h2h and h2h["matches"]:
@@ -312,12 +314,11 @@ if display_lb is not None:
     with tab3:
         st.subheader("📖 Community FAQ")
         
-        # 🟢 Social Softener Rewrite
         with st.expander("🤔 Isn't 'ranking' our friends a bit too competitive?", expanded=True):
             st.write("""
             **Actually, it’s about game night quality!** We’ve all played in matches where the teams were so lopsided that nobody had fun—the winners felt bad, and the losers felt frustrated. This MMR system is just a tool to help ensure everyone gets competitive games where **either side has a fair chance to win.**
             
-            Think of it as **Quality Assurance**: By knowing everyone's current form, we can ensure longer rallies, more sweat, and closer scores. It's not about being 'better' than your friends; it's about making sure your friends have a better time on the court!
+            Think of it as **Quality Assurance**: By knowing everyone's current form, we ensure longer rallies and closer scores. It's not about being 'better'; it's about making sure your friends have a better time on the court!
             """)
             
         with st.expander("🧮 How is the math calculated?"):
@@ -331,7 +332,7 @@ if display_lb is not None:
         with st.expander("🛡️ What is a Rookie Shield?"):
             st.write(f"""
             New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
-            During this phase, you can gain MMR, but you cannot lose it. This helps the system find your true rank without the initial stress of ranking down while you're warming up.
+            During this phase, you can gain MMR, but you cannot lose it. This helps the system find your true rank without the initial stress of ranking down.
             """)
             
         with st.expander("💠 What are the Tiers?"):
@@ -348,4 +349,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.2 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.1.4 | Fadu & Friends Community Rankings | Manila 2026")
