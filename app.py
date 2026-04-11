@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.1.6 - Column Mapping Fix & Analytics Alignment
+# Milestone: v5.1.7 - Header Date Fix & Teammate Column Alignment
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.1.6",
+    page_title="Fadu & Friends Portal v5.1.7",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.1.6 | Community Edition")
+    st.caption("v5.1.7 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -172,7 +172,14 @@ if is_admin and 'lb' in st.session_state:
     session_date = st.session_state.get('date', "Latest")
 else:
     display_lb, display_logs = public_lb, public_logs
-    session_date = "Cloud Sync"
+    # v5.1.7 Fix: Peek at the logs to find the last session date for public users
+    if display_logs and len(display_logs) > 10:
+        lines = display_logs.split('\n')
+        # Find the first line that contains a date (usually starts with 202x-xx-xx)
+        date_lines = [l for l in lines if '-' in l and len(l) < 15]
+        session_date = date_lines[0] if date_lines else "Cloud Sync"
+    else:
+        session_date = "Cloud Sync"
 
 if display_lb is not None:
     # --- HEATMAP DECAY ALERT ---
@@ -224,7 +231,7 @@ if display_lb is not None:
         final_cols = [c for c in df_disp.columns if c not in ["Total_Games", "Missed_Sessions", "Is_Present", "Total_Today"]]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
-    # --- TAB 2: COMBAT & SYNERGY (v5.1.6 Column Fix) ---
+    # --- TAB 2: COMBAT & SYNERGY (v5.1.7 Column-Vocabulary Alignment) ---
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
@@ -232,7 +239,7 @@ if display_lb is not None:
         col_p1, col_p2 = st.columns(2)
         engine = FaduMMREngine()
 
-        # v5.1.6 PRE-FETCH: Pre-load the analytics matrices
+        # PRE-FETCH: Pre-load the analytics matrices
         riv_df = engine.get_rivalry_matrix(display_logs, hero)
         syn_df = engine.get_teammate_matrix(display_logs, hero)
         
@@ -257,31 +264,27 @@ if display_lb is not None:
 
             st.divider()
             
-            # 📡 v5.1.6 FIXED RIVALRY RADAR (Using 'Total' and 'Win Rate')
+            # 📡 v5.1.7 RIVALRY RADAR (Vocab: 'Total', 'Win Rate')
             st.subheader("📡 Rivalry Radar")
             if riv_df is not None and not riv_df.empty and 'Total' in riv_df.columns:
                 nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by='Win Rate')
                 if not nemesis_df.empty:
                     nem = nemesis_df.iloc[0]
                     st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']}% Win Rate)")
-                else: 
-                    st.caption("No Nemesis found yet (Min. 2 games required).")
-            else: 
-                st.caption("No rivalry records found for this player.")
+                else: st.caption("No Nemesis found yet (Min. 2 games required).")
+            else: st.caption("No rivalry records found for this player.")
 
             st.divider()
 
-            # 🤝 v5.1.6 FIXED TEAMMATE RADAR (Using 'Total' and 'Win Rate')
+            # 🤝 v5.1.7 TEAMMATE RADAR (Vocab: 'Teammate', 'Total Games', 'Win Rate')
             st.subheader("🤝 Teammate Radar")
-            if syn_df is not None and not syn_df.empty and 'Total' in syn_df.columns:
-                duo_df = syn_df[syn_df['Total'] >= 2].sort_values(by='Win Rate', ascending=False)
+            if syn_df is not None and not syn_df.empty and 'Total Games' in syn_df.columns:
+                duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by='Win Rate', ascending=False)
                 if not duo_df.empty:
                     duo = duo_df.iloc[0]
-                    st.success(f"🤝 **Dynamic Duo:** {duo['Partner']} ({duo['Win Rate']}% Win Rate)")
-                else: 
-                    st.caption("No Duo found yet (Min. 2 games required).")
-            else: 
-                st.caption("No teammate records found for this player.")
+                    st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']}% Win Rate)")
+                else: st.caption("No Duo found yet (Min. 2 games required).")
+            else: st.caption("No teammate records found for this player.")
 
         with col_p2:
             st.subheader("📊 Deep Analytics")
@@ -323,7 +326,7 @@ if display_lb is not None:
             We use a modified **Elo Rating System**. 
             - Winning against a higher-ranked team grants more points.
             - Losing to a lower-ranked team results in a larger point loss.
-            - **Underdog Bonus:** If you face a significantly stronger team, you gain a +5 bonus just for the challenge, regardless of the outcome!
+            - **Underdog Bonus:** If you face a significantly stronger team, you gain a +5 bonus just for the challenge!
             """)
             
         with st.expander("🛡️ What is a Rookie Shield?"):
@@ -346,4 +349,4 @@ else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.1.6 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.1.7 | Fadu & Friends Community Rankings | Manila 2026")
