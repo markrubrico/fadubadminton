@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.4.1 - Hall of Fame Fix & FAQ Expansion
+# Milestone: v5.4.2 - Header Lock & Sync Safety Integration
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.4.1",
+    page_title="Fadu & Friends Portal v5.4.2",
     page_icon="🏸",
     layout="wide"
 )
@@ -100,7 +100,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.4.1 | Community Edition")
+    st.caption("v5.4.2 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -145,6 +145,7 @@ if is_admin:
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
+                        # SYNC LOCK: Payload now strictly uses Engine-Locked headers
                         payload_lb = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
                         log_lines = [[line] for line in input_area.split('\n')]
                         payload_hist = {"target": "Match_History", "headers": ["Raw_Logs"], "values": log_lines}
@@ -344,10 +345,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v5.4.1 Archetypes use calibrated thresholds for the current league meta.")
+        st.info("💡 **Note:** v5.4.2 Archetypes use calibrated thresholds for the current league meta.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.4.1 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.4.2 | Fadu & Friends Community Rankings | Manila 2026")
