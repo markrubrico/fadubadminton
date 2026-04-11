@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.4.2 - Header Lock & Sync Safety Integration
+# Milestone: v5.4.3 - Rankings Restoration & Hero Card Migration
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.4.2",
+    page_title="Fadu & Friends Portal v5.4.3",
     page_icon="🏸",
     layout="wide"
 )
@@ -100,7 +100,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.4.2 | Community Edition")
+    st.caption("v5.4.3 | Community Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -145,7 +145,7 @@ if is_admin:
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
-                        # SYNC LOCK: Payload now strictly uses Engine-Locked headers
+                        # SYNC LOCK: Payload uses the unabridged 19-column Engine output
                         payload_lb = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
                         log_lines = [[line] for line in input_area.split('\n')]
                         payload_hist = {"target": "Match_History", "headers": ["Raw_Logs"], "values": log_lines}
@@ -222,9 +222,13 @@ if display_lb is not None:
         if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
-        # Display archetypes in the main table
-        cols_to_show = ["Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", "Underdog Wins", "+/-", "Remarks"]
-        final_cols = [c for c in cols_to_show if c in df_disp.columns]
+        # RESTORED: THE ORIGINAL 13 COLUMNS DISPLAY
+        original_13 = [
+            "Rank", "Player", "Tier", "MMR", "Peak", "+/-", 
+            "AOD", "APD", "Status", "Confidence", 
+            "Last Session", "Season Record", "Remarks"
+        ]
+        final_cols = [c for c in original_13 if c in df_disp.columns]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
     # --- TAB 2: COMBAT & SYNERGY ---
@@ -237,15 +241,14 @@ if display_lb is not None:
         hero_row = display_lb.loc[display_lb['Player'].str.strip() == hero]
         
         if not hero_row.empty:
-            # --- ARCHETYPE HEADER ---
+            # --- HERO PROFILE HEADER ---
             p_arch = hero_row['Archetype'].values[0]
             st.markdown(f"## {p_arch} : {hero}")
             
-            # --- HALL OF FAME CARDS ---
+            # --- HERO HALL OF FAME CARDS ---
             st.markdown("#### 🏛️ Hall of Fame")
             f1, f2, f3, f4 = st.columns(4)
             f1.metric("🏆 All-Time Peak", f"{int(hero_row['Peak'].values[0])} MMR")
-            # Hall of Fame Fix: Directly pulling from safety-initialized columns
             f2.metric("🔥 Max Win Streak", f"{int(hero_row['Max Streak'].values[0])} Games")
             f3.metric("⚔️ Giants Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Victories vs 300+ MMR gaps.")
             f4.metric("📈 Season Record", hero_row['Season Record'].values[0])
@@ -345,10 +348,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v5.4.2 Archetypes use calibrated thresholds for the current league meta.")
+        st.info("💡 **Note:** v5.4.3 Archetypes use calibrated thresholds for the current league meta.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.4.2 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v5.4.3 | Fadu & Friends Community Rankings | Manila 2026")
