@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.4.6 - Type-Safety & Player Recovery (ug Fix)
+# Milestone: v6.0.0 - The Unity Update (Full Scale Mobile Optimization)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v5.4.6",
+    page_title="Fadu & Friends Portal v6.0.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -107,7 +107,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.4.6 | Community Edition")
+    st.caption("v6.0.0 | Unity Edition")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -152,7 +152,6 @@ if is_admin:
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
-                        # SYNC LOCK: Payload uses the unabridged 19-column Engine output
                         payload_lb = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
                         log_lines = [[line] for line in input_area.split('\n')]
                         payload_hist = {"target": "Match_History", "headers": ["Raw_Logs"], "values": log_lines}
@@ -181,62 +180,51 @@ else:
     display_lb, display_logs = public_lb, public_logs
     if display_logs:
         import re
-        # Find all date patterns (e.g., 11-Apr) and pick the last one
         all_dates = re.findall(r'^(\d{1,2}-[A-Za-z]+)', display_logs, re.MULTILINE)
         session_date = all_dates[-1] if all_dates else "Latest Session"
     else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    # DATA SAFETY LAYER: Force initialization of new stats if missing from CSV
     for col in ["Max Streak", "Underdog Wins", "Archetype"]:
         if col not in display_lb.columns:
             display_lb[col] = 0 if col != "Archetype" else "Consistent Force"
 
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 
-    # --- TAB 1: RANKINGS ---
+    # --- TAB 1: RANKINGS (MOBILE OPTIMIZED) ---
     with tab1:
         st.markdown(f"###### 🌟 Session Highlights ({session_date})")
-        h1, h2, h3, h4 = st.columns(4)
+        
+        # MOBILE GRID: 2x2 layout for vertical efficiency
+        m_col1, m_col2 = st.columns(2)
+        m_col3, m_col4 = st.columns(2)
         
         if '+/-' in display_lb.columns:
             mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
-            h1.metric("🔥 Session MVP", mvp_row['Player'], f"+{mvp_row['+/-']} MMR", help="Highest MMR gain in the latest session.")
+            m_col1.metric("🔥 MVP", mvp_row['Player'], f"+{mvp_row['+/-']}", help="Highest gain this session.")
             
         if 'APD' in display_lb.columns:
-            # Fix: Identify the carry (lowest APD)
             carry_row = display_lb.loc[display_lb['APD'].idxmin()]
-            h2.metric("🏋️ Hard Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Average Partner Delta: Negative values indicate carrying partners.")
+            m_col2.metric("🏋️ Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Average Partner Delta.")
 
-        if 'Last Session' in display_lb.columns:
-            def calc_total(val):
-                try: 
-                    if pd.isna(val) or str(val).strip() == "": return 0
-                    return sum([int(i) for i in str(val).split('-')])
-                except: return 0
-            display_lb['Total_Today'] = display_lb['Last Session'].apply(calc_total)
-            iron_row = display_lb.loc[display_lb['Total_Today'].idxmax()]
-            h3.metric("🦾 Iron Man", iron_row['Player'], f"{iron_row['Total_Today']} Games", help="Most games played in the latest session.")
+        if 'AOD' in display_lb.columns:
+            tank_row = display_lb.loc[display_lb['AOD'].idxmax()]
+            m_col3.metric("🛡️ Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", help="Faced toughest rivals.")
         
         if 'MMR' in display_lb.columns:
-            h4.metric("📈 League Average", f"{int(display_lb['MMR'].mean())}", "Balanced")
+            m_col4.metric("📈 Avg", f"{int(display_lb['MMR'].mean())}", "Balanced")
 
         st.divider()
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        if hide_inactive and 'Miss_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_inactive and 'Missed_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
         if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
-        # RESTORED: THE ORIGINAL 13 COLUMNS DISPLAY WITH TOOLTIPS
-        original_13 = [
-            "Rank", "Player", "Tier", "MMR", "Peak", "+/-", 
-            "AOD", "APD", "Status", "Confidence", 
-            "Last Session", "Season Record", "Remarks"
-        ]
+        original_13 = ["Rank", "Player", "Tier", "MMR", "Peak", "+/-", "AOD", "APD", "Status", "Confidence", "Last Session", "Season Record", "Remarks"]
         final_cols = [c for c in original_13 if c in df_disp.columns]
         
         st.dataframe(
@@ -244,14 +232,14 @@ if display_lb is not None:
             width='stretch', 
             hide_index=True,
             column_config={
-                "AOD": st.column_config.NumberColumn("AOD", help="Average Opponent Difficulty: Strength of your rivals."),
-                "APD": st.column_config.NumberColumn("APD", help="Average Partner Delta: Your impact relative to your partner."),
-                "Confidence": st.column_config.TextColumn("Confidence", help="Rating reliability based on games played."),
+                "AOD": st.column_config.NumberColumn("AOD", help="Opponent Difficulty."),
+                "APD": st.column_config.NumberColumn("APD", help="Partner Impact."),
+                "Confidence": st.column_config.TextColumn("Conf", help="Reliability."),
                 "Remarks": st.column_config.TextColumn("Remarks", width="large")
             }
         )
 
-    # --- TAB 2: COMBAT & SYNERGY ---
+    # --- TAB 2: COMBAT & SYNERGY (MOBILE STACKING OPTIMIZED) ---
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         hero = st.selectbox("Select Player Profile:", player_list)
@@ -261,58 +249,43 @@ if display_lb is not None:
         hero_row = display_lb.loc[display_lb['Player'].str.strip() == hero]
         
         if not hero_row.empty:
-            # --- HERO PROFILE HEADER ---
-            p_arch = hero_row['Archetype'].values[0]
-            st.markdown(f"## {p_arch} : {hero}")
+            st.markdown(f"## {hero_row['Archetype'].values[0]} : {hero}")
             
-            # --- HERO HALL OF FAME CARDS ---
             st.markdown("#### 🏛️ Hall of Fame")
-            f1, f2, f3, f4 = st.columns(4)
-            f1.metric("🏆 All-Time Peak", f"{int(hero_row['Peak'].values[0])} MMR")
-            f2.metric("🔥 Max Win Streak", f"{int(hero_row['Max Streak'].values[0])} Games", help="Longest career winning streak.")
-            f3.metric("⚔️ Giants Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Wins against opponents with a 300+ MMR advantage.")
-            f4.metric("📈 Season Record", hero_row['Season Record'].values[0])
+            f1, f2 = st.columns(2)
+            f3, f4 = st.columns(2)
+            f1.metric("🏆 Peak", f"{int(hero_row['Peak'].values[0])}")
+            f2.metric("🔥 Streak", f"{int(hero_row['Max Streak'].values[0])}", help="Longest win streak.")
+            f3.metric("⚔️ Slayed", f"{int(hero_row['Underdog Wins'].values[0])}", help="Wins vs 300+ MMR gaps.")
+            f4.metric("📈 Record", hero_row['Season Record'].values[0])
 
         st.divider()
-        col_p1, col_p2 = st.columns(2)
-        riv_df = engine.get_rivalry_matrix(display_logs, hero)
-        syn_df = engine.get_teammate_matrix(display_logs, hero)
-        
-        with col_p1:
+        # HERO PROFILE STACKING
+        with st.container():
             st.subheader("🛡️ Road to Mythic")
             if not hero_row.empty:
                 current_mmr = hero_row['MMR'].values[0]
-                st.write(f"**Current Rank:** {hero_row['Tier'].values[0]}")
+                st.write(f"**Rank:** {hero_row['Tier'].values[0]} ({int(current_mmr)})")
                 st.progress(min(max((current_mmr - 1000) / 2200, 0.0), 1.0))
-                st.caption(f"Current MMR: {int(current_mmr)}")
-
-            st.divider()
-            st.subheader("📡 Radar Stats")
+        
+        st.divider()
+        with st.expander("📊 Synergy & Rivalry Analytics"):
+            riv_df = engine.get_rivalry_matrix(display_logs, hero)
+            syn_df = engine.get_teammate_matrix(display_logs, hero)
+            
             if riv_df is not None and not riv_df.empty:
                 nemesis_df = riv_df[riv_df['Total'] >= 2].sort_values(by=['Wins'], ascending=True)
                 if not nemesis_df.empty:
-                    nem = nemesis_df.iloc[0]
-                    st.error(f"⚠️ **Nemesis:** {nem['Opponent']} ({nem['Win Rate']} Win Rate)")
-                else: st.caption("No Nemesis found yet.")
+                    st.error(f"⚠️ **Nemesis:** {nemesis_df.iloc[0]['Opponent']} ({nemesis_df.iloc[0]['Win Rate']} WR)")
 
-            st.divider()
-            st.subheader("🤝 Synergy Radar")
             if syn_df is not None and not syn_df.empty:
                 duo_df = syn_df[syn_df['Total Games'] >= 2].sort_values(by=['Net MMR Impact'], ascending=False)
                 if not duo_df.empty:
-                    duo = duo_df.iloc[0]
-                    st.success(f"🤝 **Dynamic Duo:** {duo['Teammate']} ({duo['Win Rate']} Win Rate)")
+                    st.success(f"🤝 **Dynamic Duo:** {duo_df.iloc[0]['Teammate']} ({duo_df.iloc[0]['Win Rate']} WR)")
 
-        with col_p2:
-            st.subheader("📊 Deep Analytics")
             if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
                 if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
-            if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
-                s_df = engine.get_stamina_analysis(display_logs, hero)
-                if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
             
-            st.divider()
-            st.subheader("⚔️ Direct Head-to-Head")
             rival = st.selectbox("Compare vs specific Rival:", player_list)
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
@@ -321,21 +294,50 @@ if display_lb is not None:
                     st.table(pd.DataFrame(h2h["matches"]))
 
         st.divider()
-        st.subheader("📜 Career Ledger & Rank History")
-        hist_df = engine.get_player_history(display_logs, hero)
-        
-        if hist_df is not None and not hist_df.empty:
-            chart_data = hist_df.iloc[::-1].reset_index(drop=True)
-            st.line_chart(chart_data['Balance'], use_container_width=True)
-            st.dataframe(hist_df, use_container_width=True, hide_index=True)
-        else:
-            st.caption("No history found.")
+        with st.expander("📜 Career Ledger & History", expanded=False):
+            if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
+                s_df = engine.get_stamina_analysis(display_logs, hero)
+                if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
+                
+            hist_df = engine.get_player_history(display_logs, hero)
+            if hist_df is not None and not hist_df.empty:
+                st.line_chart(hist_df.iloc[::-1].reset_index(drop=True)['Balance'], use_container_width=True)
+                st.dataframe(hist_df, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: FAQ ---
+    # --- TAB 3: FAQ (UNITY PHILOSOPHY RE-INTEGRATION) ---
     with tab3:
         st.subheader("📖 FAQ & Game Manual")
         
-        with st.expander("🎭 Archetypes Legend", expanded=True):
+        # PHILOSOPHY SECTION (v6.0.0 NEW ADDITION)
+        with st.expander("🏸 Why are we tracking MMR?", expanded=True):
+            st.markdown("""
+            **It’s not about who is better; it’s about making sure every session feels like a Finals match.**
+            
+            The math helps us build groups where everyone gets to play at their limit, ensuring no one is bored and no one is overwhelmed. 
+            The heart of our community lies in those "21-19" games—the ones where every serve matters and every rally is earned. 
+            The MMR system is simply the compass we use to find that balance. 
+            
+            By tracking performance data, we can curate matchups where every player is challenged at their limit. This ensures a 
+            "Goldilocks" environment for everyone: **no one is overwhelmed by a massive skill gap, and no one is bored by an easy win.**
+            
+            There is still a lot of work to be done and we appreciate your support and suggestions. Thanks!
+            """)
+
+        with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
+            st.markdown("""
+            We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
+            **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
+            
+            Our goal is for you to look at these stats and find new goals:
+            * *Can I improve my win rate when playing my 15th game of the night?*
+            * *Who is the partner that truly complements my playstyle?*
+            * *How do I perform when I’m the 'Underdog' in a high-tier matchup?*
+            
+            Hopefully, this data offers another layer of enjoyment to the sport we love, giving us all something to talk about 
+            (and a little friendly trash talk) long after the lights at the court go out.
+            """)
+
+        with st.expander("🎭 Archetypes Legend"):
             st.write("""
             Your **Archetype** is determined by your career stats and playstyle:
             - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
@@ -368,10 +370,10 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v5.4.6 Archetypes use calibrated thresholds for the current league meta.")
+        st.info("💡 **Note:** v6.0.0 Archetypes use calibrated thresholds for the current league meta.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.4.6 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.0.0 | Fadu & Friends Community Rankings | Manila 2026")
