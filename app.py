@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v5.0.1 - Hardened Public Player Portal
+# Milestone: v5.1.0 - Community Edition Launch
 st.set_page_config(
-    page_title="Fadu MMR Portal v5.0.1",
+    page_title="Fadu & Friends Portal v5.1.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -40,7 +40,8 @@ with st.sidebar:
     st.title("🏸 Fadu Ops")
     
     # 🔐 ADMIN ACCESS GATE
-    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to enable Commissioner tools.")
+    # This is the "Conditional View" trigger.
+    ops_key = st.text_input("Admin Access Key", type="password", help="Enter key to unlock Commissioner Console.")
     is_admin = (ops_key == st.secrets.get("OPS_PASSWORD", "fadu2026"))
     
     if is_admin:
@@ -49,7 +50,7 @@ with st.sidebar:
         
         st.divider()
         
-        # Admin-Only Connection Indicators
+        # Admin-Only Connection Indicators (Hidden from players for clean UX)
         if "BRIDGE_URL" in st.secrets:
             st.success("Registry: 🟢 Online")
         else:
@@ -89,15 +90,19 @@ with st.sidebar:
 
     st.divider()
     with st.expander("💠 Initial Seeded Roster"):
-        st.caption("v5.0 Veteran Seed List (1500 MMR Start):")
+        st.caption("v5.1 Veteran Seed List (1500 MMR Start):")
         seed_string = ", ".join(config.SEEDS)
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v5.0.1 | Hardened Portal Build")
+    st.caption("v5.1.0 | Community Edition")
     st.info("📍 Manila, PH")
 
-# --- 4. DATA LOADING ---
+# --- 4. MOBILE NUDGE & DATA LOADING ---
+# The nudge only appears for players to guide them on mobile UI.
+if not is_admin:
+    st.info("👈 **Mobile Users:** Tap the arrow in the top-left to filter rankings or access player profiles.")
+
 public_lb, public_logs = fetch_public_data()
 
 # --- 5. ADMIN VIEW: COMMISSIONER CONSOLE ---
@@ -154,7 +159,7 @@ if is_admin:
 
 # --- 6. PLAYER HUB: THE ELITE EXPERIENCE ---
 st.divider()
-st.title("🏆 Fadu Badminton Portal")
+st.title("🏆 Fadu & Friends: Fun Community Rankings")
 
 # Source of Truth routing
 if is_admin and 'lb' in st.session_state:
@@ -169,7 +174,7 @@ if display_lb is not None:
             decay_df = pd.DataFrame(st.session_state.decayed)
             st.dataframe(decay_df.style.map(lambda v: 'background-color: #c0392b; color: white' if v > 4 else 'background-color: #e67e22; color: white', subset=['Missed']), width='stretch', hide_index=True)
 
-    tab1, tab2 = st.tabs(["📊 Hall of Fame & Rankings", "⚔️ Combat & Progression"])
+    tab1, tab2, tab3 = st.tabs(["📊 Hall of Fame & Rankings", "⚔️ Combat & Progression", "📖 FAQ"])
 
     # --- TAB 1: HALL OF FAME & LEADERBOARD ---
     with tab1:
@@ -200,9 +205,11 @@ if display_lb is not None:
 
         st.divider()
         
-        # Leaderboard
-        if is_admin: st.metric("Session Wealth Drift", f"{st.session_state.drift} MMR")
-        search = st.text_input("🔍 Search Player:", placeholder="Filter by name...")
+        # FIXED: .get() prevents AttributeError when admin hasn't run calculate yet
+        if is_admin: 
+            st.metric("Session Wealth Drift", f"{st.session_state.get('drift', 0)} MMR")
+        
+        search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         if hide_inactive: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
@@ -290,8 +297,47 @@ if display_lb is not None:
                 if h2h and h2h["matches"]:
                     st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
                     st.table(pd.DataFrame(h2h["matches"]))
+
+    # --- TAB 3: FAQ ---
+    with tab3:
+        st.subheader("📖 Community FAQ: How it Works")
+        
+        with st.expander("🤔 Why do we have an MMR system?"):
+            st.write("""
+            The primary goal of this system is **Balanced & Fun Play**. MMR (Matchmaking Rating) is not a judgment—it's a tool to help ensure everyone gets competitive games where either side has a fair chance to win.
+            """)
+            
+        with st.expander("🧮 How is the math calculated?"):
+            st.write("""
+            We use a modified **Elo Rating System**. 
+            - Winning against a higher-ranked team grants more points.
+            - Losing to a lower-ranked team results in a larger point loss.
+            - **Underdog Bonus:** If you face a significantly stronger team, you gain a +5 bonus just for the challenge!
+            """)
+            
+        with st.expander("🛡️ What is a Rookie Shield?"):
+            st.write(f"""
+            New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. 
+            During this phase, you can gain MMR, but you cannot lose it. This helps the system find your true rank without the initial stress of ranking down.
+            """)
+            
+        with st.expander("🔥 What is MMR Decay?"):
+            st.write("""
+            To keep the leaderboard active and fair, missing **3 or more consecutive sessions** results in 'Decay' (-50 points). This ensures that the rankings always reflect active players.
+            """)
+            
+        with st.expander("💠 What are the Tiers?"):
+            st.table(pd.DataFrame([
+                {"Tier": "Master", "MMR Range": "1000 - 1499"},
+                {"Tier": "Grandmaster", "MMR Range": "1500 - 1899"},
+                {"Tier": "Epic", "MMR Range": "1900 - 2299"},
+                {"Tier": "Legend", "MMR Range": "2300 - 2699"},
+                {"Tier": "Mythic", "MMR Range": "2700 - 3199"},
+                {"Tier": "Mythic Glory", "MMR Range": "3200+"}
+            ]))
+
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
 st.divider()
-st.caption("v5.0.1 | Fadu Badminton Portal | Manila 2026")
+st.caption("v5.1.0 | Fadu & Friends Community Rankings | Manila 2026")
