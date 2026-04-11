@@ -294,18 +294,19 @@ if display_lb is not None:
                     st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
                     st.table(pd.DataFrame(h2h["matches"]))
 
-        # --- NEW: CAREER LEDGER SECTION ---
+        # --- FIXED: CAREER LEDGER SECTION ---
         st.divider()
         st.subheader("📜 Career Ledger & Performance History")
         hist_df = engine.get_player_history(display_logs, hero)
         
         if hist_df is not None and not hist_df.empty:
-            # Show a line chart of MMR Balance over time
-            # We reverse the DF to chronological for the chart
-            chart_data = hist_df.iloc[::-1].copy()
+            # FIX: Reverse the rows AND reset the index so 0 is the start of the career
+            chart_data = hist_df.iloc[::-1].reset_index(drop=True)
+            
+            # This will now plot Oldest (left) to Newest (right)
             st.line_chart(chart_data['Balance'], use_container_width=True)
             
-            # Show the detailed ledger table
+            # Keep the table as Newest-on-top for easy reading
             st.dataframe(hist_df, use_container_width=True, hide_index=True)
         else:
             st.caption("No match history found for this player yet.")
