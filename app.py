@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.0.2 - The Unity Update (Decay Visibility & Admin Oversight)
+# Milestone: v6.1.0 - The Elite Oversight Update (Validated Highlights & Season Cards)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.0.2",
+    page_title="Fadu & Friends Portal v6.1.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -30,7 +30,7 @@ def fetch_public_data():
         lb_df['Player'] = lb_df['Player'].astype(str)
         
         # Convert numeric columns safely, coercing errors (like date strings) to NaN
-        for col in ["APD", "AOD", "MMR", "Peak", "+/-"]:
+        for col in ["APD", "AOD", "MMR", "Peak", "+/-", "Total_Games", "Underdog Wins"]:
             if col in lb_df.columns:
                 lb_df[col] = pd.to_numeric(lb_df[col], errors='coerce').fillna(0)
         
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.0.2 | Unity Edition")
+    st.caption("v6.1.0 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -158,17 +158,6 @@ if is_admin:
                         except:
                             st.error("Sync Failed")
 
-    # RESTORED: ADMIN ONLY RUST/DECAY REPORT
-    if 'decayed' in st.session_state:
-        with st.expander("📉 Inactivity Decay Report", expanded=True):
-            if st.session_state.decayed:
-                decay_df = pd.DataFrame(st.session_state.decayed)
-                total_rust = decay_df['Penalty'].sum()
-                st.warning(f"Total MMR Removed via Decay: {total_rust}")
-                st.table(decay_df)
-            else:
-                st.success("No players currently in decay (Rust Penalty).")
-
     if 'audit_report' in st.session_state:
         st.info(f"### 📋 Audit Findings\n{st.session_state.audit_report}")
         if st.button("Close Audit"): del st.session_state.audit_report; st.rerun()
@@ -191,7 +180,8 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    for col in ["Max Streak", "Underdog Wins", "Archetype"]:
+    # Consistency check for required highlight columns
+    for col in ["Max Streak", "Underdog Wins", "Archetype", "Total_Games"]:
         if col not in display_lb.columns:
             display_lb[col] = 0 if col != "Archetype" else "Consistent Force"
 
@@ -199,31 +189,65 @@ if display_lb is not None:
 
     # --- TAB 1: RANKINGS (MOBILE OPTIMIZED) ---
     with tab1:
-        st.markdown(f"###### 🌟 Session Highlights ({session_date})")
+        # --- SESSION HIGHLIGHTS (STRICT PRESENCE VALIDATION) ---
+        st.markdown(f"###### 🌟 Last Session Highlights ({session_date})")
+        
+        # Filter strictly for players present in the last session to avoid ghost MVPs
+        present_df = display_lb[display_lb['Is_Present'] == True] if 'Is_Present' in display_lb.columns else pd.DataFrame()
+        
         m_col1, m_col2 = st.columns(2)
         m_col3, m_col4 = st.columns(2)
         
-        if '+/-' in display_lb.columns:
-            mvp_row = display_lb.loc[display_lb['+/-'].idxmax()]
-            m_col1.metric("🔥 MVP", mvp_row['Player'], f"+{mvp_row['+/-']}", help="Highest gain this session.")
-            
-        if 'APD' in display_lb.columns:
-            carry_row = display_lb.loc[display_lb['APD'].idxmin()]
-            m_col2.metric("🏋️ Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Negative values indicate carrying partners.")
+        if not present_df.empty:
+            if '+/-' in present_df.columns:
+                mvp_row = present_df.loc[present_df['+/-'].idxmax()]
+                m_col1.metric("🔥 Session MVP", mvp_row['Player'], f"+{int(mvp_row['+/-'])}", help="Highest gain today.")
+                
+            if 'APD' in present_df.columns:
+                carry_row = present_df.loc[present_df['APD'].idxmin()]
+                m_col2.metric("🏋️ Session Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Most weight lifted today.")
 
-        if 'AOD' in display_lb.columns:
-            tank_row = display_lb.loc[display_lb['AOD'].idxmax()]
-            m_col3.metric("🛡️ Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", help="Faced toughest rivals.")
-        
-        if 'MMR' in display_lb.columns:
-            m_col4.metric("📈 Avg", f"{int(display_lb['MMR'].mean())}", "Balanced")
+            if 'AOD' in present_df.columns:
+                tank_row = present_df.loc[present_df['AOD'].idxmax()]
+                m_col3.metric("🛡️ Session Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", help="Toughest schedule today.")
+            
+            if 'MMR' in present_df.columns:
+                m_col4.metric("📉 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR")
+        else:
+            st.caption("No active session data available for highlights.")
+
+        st.divider()
+
+        # --- SEASON HIGHLIGHTS (LEAGUE-WIDE HALL OF FAME) ---
+        st.markdown("###### 👑 Season Leaders (All-Time)")
+        h_col1, h_col2 = st.columns(2)
+        h_col3, h_col4 = st.columns(2)
+
+        # 1. League Leader
+        leader = display_lb.iloc[0]
+        h_col1.metric("🏆 League Leader", leader['Player'], f"Rank #1 ({leader['Tier']})")
+
+        # 2. Iron Man (Volume)
+        if 'Total_Games' in display_lb.columns:
+            ironman_row = display_lb.loc[display_lb['Total_Games'].idxmax()]
+            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} Games", help="Most games played this season.")
+
+        # 3. Most Improved (Current MMR vs Peak Min)
+        # Using Peak as a proxy for 'Best' while MMR represents 'Current Growth'
+        improved_row = display_lb.loc[(display_lb['MMR'] - display_lb['Peak'].min()).idxmax()]
+        h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR", help="Highest climb from floor.")
+
+        # 4. Giant Slayer (Underdog Wins)
+        if 'Underdog Wins' in display_lb.columns:
+            slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
+            h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays", help="Most underdog victories.")
 
         st.divider()
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        if hide_inactive and 'Miss_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_inactive and 'Missed_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
         if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
         if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
         
@@ -316,25 +340,12 @@ if display_lb is not None:
             The math helps us build groups where everyone gets to play at their limit, ensuring no one is bored and no one is overwhelmed. 
             The heart of our community lies in those "21-19" games—the ones where every serve matters and every rally is earned. 
             The MMR system is simply the compass we use to find that balance. 
-            
-            By tracking performance data, we can curate matchups where every player is challenged at their limit. This ensures a 
-            "Goldilocks" environment for everyone: **no one is overwhelmed by a massive skill gap, and no one is bored by an easy win.**
-            
-            There is still a lot of work to be done and we appreciate your support and suggestions. Thanks!
             """)
 
         with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
             st.markdown("""
             We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
             **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
-            
-            Our goal is for you to look at these stats and find new goals:
-            * *Can I improve my win rate when playing my 15th game of the night?*
-            * *Who is the partner that truly complements my playstyle?*
-            * *How do I perform when I’m the 'Underdog' in a high-tier matchup?*
-            
-            Hopefully, this data offers another layer of enjoyment to the sport we love, giving us all something to talk about 
-            (and a little friendly trash talk) long after the lights at the court go out.
             """)
 
         with st.expander("🎭 Archetypes Legend"):
@@ -350,14 +361,6 @@ if display_lb is not None:
             - **🏸 Consistent Force:** The reliable backbone of the community.
             """)
 
-        with st.expander("⚔️ How does the Underdog (Giant Slayer) Bonus work?"):
-            st.write("""
-            If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
-            - You receive an injection of up to **+80 MMR** on top of your base win points.
-            - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
-            - Note: In v1.4.2, the MMR ceiling was removed, so all Tiers can now earn this bonus!
-            """)
-
         with st.expander("🛡️ What is a Rookie Shield?"):
             st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. You gain full MMR for wins, but lose only -10 MMR on losses.")
 
@@ -367,12 +370,26 @@ if display_lb is not None:
                 {"Tier": "Epic", "MMR Range": "1900-2299"}, {"Tier": "Legend", "MMR Range": "2300-2699"},
                 {"Tier": "Mythic", "MMR Range": "2700-3199"}, {"Tier": "Mythic Glory", "MMR Range": "3200+"}
             ]))
-        
-        st.divider()
-        st.info("💡 **Note:** v6.0.2 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
+# --- ADMIN VIEW: REPOSITIONED RUST REPORT & DRIFT (BOTTOM) ---
+if is_admin:
+    st.divider()
+    st.subheader("📊 Operational Oversight")
+    
+    if 'decayed' in st.session_state:
+        with st.expander("📉 Inactivity Decay Report (Rust Log)", expanded=False):
+            if st.session_state.decayed:
+                decay_df = pd.DataFrame(st.session_state.decayed)
+                st.warning(f"Total Wealth Drift (Inactivity Penalty): {decay_df['Penalty'].sum()}")
+                st.table(decay_df)
+            else:
+                st.success("No players currently in rust decay.")
+    
+    if 'drift' in st.session_state:
+        st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
+
 st.divider()
-st.caption("v6.0.2 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.0 | Fadu & Friends Community Rankings | Manila 2026")
