@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.0 - The Elite Oversight Update (Validated Highlights & Season Cards)
+# Milestone: v6.1.1 - The Elite Oversight Update (Full Oversight & Logic Restoration)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.0",
+    page_title="Fadu & Friends Portal v6.1.1",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.0 | Elite Oversight")
+    st.caption("v6.1.1 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -212,7 +212,7 @@ if display_lb is not None:
                 m_col3.metric("🛡️ Session Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", help="Toughest schedule today.")
             
             if 'MMR' in present_df.columns:
-                m_col4.metric("📉 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR")
+                m_col4.metric("📈 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR")
         else:
             st.caption("No active session data available for highlights.")
 
@@ -230,10 +230,9 @@ if display_lb is not None:
         # 2. Iron Man (Volume)
         if 'Total_Games' in display_lb.columns:
             ironman_row = display_lb.loc[display_lb['Total_Games'].idxmax()]
-            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} Games", help="Most games played this season.")
+            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G", help="Most games played this season.")
 
-        # 3. Most Improved (Current MMR vs Peak Min)
-        # Using Peak as a proxy for 'Best' while MMR represents 'Current Growth'
+        # 3. Most Improved (Current MMR vs Peak Min proxy)
         improved_row = display_lb.loc[(display_lb['MMR'] - display_lb['Peak'].min()).idxmax()]
         h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR", help="Highest climb from floor.")
 
@@ -308,9 +307,16 @@ if display_lb is not None:
                 if not duo_df.empty:
                     st.success(f"🤝 **Dynamic Duo:** {duo_df.iloc[0]['Teammate']} ({duo_df.iloc[0]['Win Rate']} WR)")
 
-            if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
-                if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
+            # Symmetrical display buttons
+            c_a, c_b = st.columns(2)
+            with c_a:
+                if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
+                    if syn_df is not None: st.dataframe(syn_df, width='stretch', hide_index=True)
+            with c_b:
+                if st.button(f"Generate Rivalry Matrix for {hero}", width='stretch'):
+                    if riv_df is not None: st.dataframe(riv_df, width='stretch', hide_index=True)
             
+            st.divider()
             rival = st.selectbox("Compare vs Rival:", player_list)
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
@@ -329,7 +335,7 @@ if display_lb is not None:
                 st.line_chart(hist_df.iloc[::-1].reset_index(drop=True)['Balance'], use_container_width=True)
                 st.dataframe(hist_df, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: FAQ ---
+    # --- TAB 3: FAQ & PHILOSOPHY ---
     with tab3:
         st.subheader("📖 FAQ & Game Manual")
         
@@ -340,16 +346,30 @@ if display_lb is not None:
             The math helps us build groups where everyone gets to play at their limit, ensuring no one is bored and no one is overwhelmed. 
             The heart of our community lies in those "21-19" games—the ones where every serve matters and every rally is earned. 
             The MMR system is simply the compass we use to find that balance. 
+            
+            By tracking performance data, we can curate matchups where every player is challenged at their limit. This ensures a 
+            "Goldilocks" environment for everyone: **no one is overwhelmed by a massive skill gap, and no one is bored by an easy win.**
+            
+            There is still a lot of work to be done and we appreciate your support and suggestions. Thanks!
             """)
 
         with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
             st.markdown("""
             We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
             **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
+            
+            Our goal is for you to look at these stats and find new goals:
+            * *Can I improve my win rate when playing my 15th game of the night?*
+            * *Who is the partner that truly complements my playstyle?*
+            * *How do I perform when I’m the 'Underdog' in a high-tier matchup?*
+            
+            Hopefully, this data offers another layer of enjoyment to the sport we love, giving us all something to talk about 
+            (and a little friendly trash talk) long after the lights at the court go out.
             """)
 
         with st.expander("🎭 Archetypes Legend"):
             st.write("""
+            Your **Archetype** is determined by your career stats and playstyle:
             - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
             - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
             - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
@@ -361,6 +381,14 @@ if display_lb is not None:
             - **🏸 Consistent Force:** The reliable backbone of the community.
             """)
 
+        with st.expander("⚔️ How does the Underdog (Giant Slayer) Bonus work?"):
+            st.write("""
+            If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
+            - You receive an injection of up to **+80 MMR** on top of your base win points.
+            - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
+            - Note: In v1.4.2, the MMR ceiling was removed, so all Tiers can now earn this bonus!
+            """)
+
         with st.expander("🛡️ What is a Rookie Shield?"):
             st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. You gain full MMR for wins, but lose only -10 MMR on losses.")
 
@@ -370,11 +398,14 @@ if display_lb is not None:
                 {"Tier": "Epic", "MMR Range": "1900-2299"}, {"Tier": "Legend", "MMR Range": "2300-2699"},
                 {"Tier": "Mythic", "MMR Range": "2700-3199"}, {"Tier": "Mythic Glory", "MMR Range": "3200+"}
             ]))
+        
+        st.divider()
+        st.info("💡 **Note:** v6.1.1 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
-# --- ADMIN VIEW: REPOSITIONED RUST REPORT & DRIFT (BOTTOM) ---
+# --- ADMIN OPERATIONAL OVERSIGHT (BOTTOM) ---
 if is_admin:
     st.divider()
     st.subheader("📊 Operational Oversight")
@@ -392,4 +423,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.0 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.1 | Fadu & Friends Community Rankings | Manila 2026")
