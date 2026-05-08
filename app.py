@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.2 - The Elite Oversight Update (Chronological Game Indexing)
+# Milestone: v6.1.3 - The Elite Oversight Update (Descending Career Ledger)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.2",
+    page_title="Fadu & Friends Portal v6.1.3",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.2 | Elite Oversight")
+    st.caption("v6.1.3 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -223,14 +223,14 @@ if display_lb is not None:
 
         if 'Total_Games' in display_lb.columns:
             ironman_row = display_lb.loc[display_lb['Total_Games'].idxmax()]
-            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G", help="Most games played this season.")
+            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G")
 
         improved_row = display_lb.loc[(display_lb['MMR'] - display_lb['Peak'].min()).idxmax()]
-        h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR", help="Highest climb from floor.")
+        h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR")
 
         if 'Underdog Wins' in display_lb.columns:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
-            h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays", help="Most underdog victories.")
+            h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays")
 
         st.divider()
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
@@ -243,7 +243,6 @@ if display_lb is not None:
         
         original_13 = ["Rank", "Player", "Tier", "MMR", "Peak", "+/-", "AOD", "APD", "Status", "Confidence", "Last Session", "Season Record", "Remarks"]
         final_cols = [c for c in original_13 if c in df_disp.columns]
-        
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
     # --- TAB 2: COMBAT & SYNERGY ---
@@ -312,13 +311,15 @@ if display_lb is not None:
                 
             hist_df = engine.get_player_history(display_logs, hero)
             if hist_df is not None and not hist_df.empty:
-                # Add Chronological Game Indexing
-                hist_disp = hist_df.iloc[::-1].copy() # Reverse to chronological order (Game 1 at top)
+                # 1. Start with chronological order to assign correct "Game X" numbers
+                hist_disp = hist_df.iloc[::-1].copy() 
                 hist_disp.insert(0, "No.", [f"Game {i+1}" for i in range(len(hist_disp))])
                 
-                st.line_chart(hist_disp.reset_index(drop=True)['Balance'], use_container_width=True)
-                # Display chronologically (Game 1 at top) as a Ledger
-                st.dataframe(hist_disp, use_container_width=True, hide_index=True)
+                # 2. Re-reverse for display (Latest games at the top)
+                hist_final = hist_disp.iloc[::-1]
+                
+                st.line_chart(hist_final.reset_index(drop=True)['Balance'], use_container_width=True)
+                st.dataframe(hist_final, use_container_width=True, hide_index=True)
 
     # --- TAB 3: FAQ & PHILOSOPHY ---
     with tab3:
@@ -385,7 +386,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.1.2 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.1.3 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -408,4 +409,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.2 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.3 | Fadu & Friends Community Rankings | Manila 2026")
