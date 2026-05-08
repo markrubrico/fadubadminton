@@ -7,9 +7,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.1 - The Elite Oversight Update (Full Oversight & Logic Restoration)
+# Milestone: v6.1.2 - The Elite Oversight Update (Chronological Game Indexing)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.1",
+    page_title="Fadu & Friends Portal v6.1.2",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +101,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.1 | Elite Oversight")
+    st.caption("v6.1.2 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -180,19 +180,15 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    # Consistency check for required highlight columns
     for col in ["Max Streak", "Underdog Wins", "Archetype", "Total_Games"]:
         if col not in display_lb.columns:
             display_lb[col] = 0 if col != "Archetype" else "Consistent Force"
 
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 
-    # --- TAB 1: RANKINGS (MOBILE OPTIMIZED) ---
+    # --- TAB 1: RANKINGS ---
     with tab1:
-        # --- SESSION HIGHLIGHTS (STRICT PRESENCE VALIDATION) ---
         st.markdown(f"###### 🌟 Last Session Highlights ({session_date})")
-        
-        # Filter strictly for players present in the last session to avoid ghost MVPs
         present_df = display_lb[display_lb['Is_Present'] == True] if 'Is_Present' in display_lb.columns else pd.DataFrame()
         
         m_col1, m_col2 = st.columns(2)
@@ -212,31 +208,26 @@ if display_lb is not None:
                 m_col3.metric("🛡️ Session Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", help="Toughest schedule today.")
             
             if 'MMR' in present_df.columns:
-                m_col4.metric("📈 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR")
+                m_col4.metric("📉 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR")
         else:
             st.caption("No active session data available for highlights.")
 
         st.divider()
 
-        # --- SEASON HIGHLIGHTS (LEAGUE-WIDE HALL OF FAME) ---
         st.markdown("###### 👑 Season Leaders (All-Time)")
         h_col1, h_col2 = st.columns(2)
         h_col3, h_col4 = st.columns(2)
 
-        # 1. League Leader
         leader = display_lb.iloc[0]
         h_col1.metric("🏆 League Leader", leader['Player'], f"Rank #1 ({leader['Tier']})")
 
-        # 2. Iron Man (Volume)
         if 'Total_Games' in display_lb.columns:
             ironman_row = display_lb.loc[display_lb['Total_Games'].idxmax()]
             h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G", help="Most games played this season.")
 
-        # 3. Most Improved (Current MMR vs Peak Min proxy)
         improved_row = display_lb.loc[(display_lb['MMR'] - display_lb['Peak'].min()).idxmax()]
         h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR", help="Highest climb from floor.")
 
-        # 4. Giant Slayer (Underdog Wins)
         if 'Underdog Wins' in display_lb.columns:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
             h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays", help="Most underdog victories.")
@@ -246,24 +237,14 @@ if display_lb is not None:
         df_disp = display_lb.copy()
         if search: df_disp = df_disp[df_disp['Player'].str.contains(search, case=False)]
         
-        if hide_inactive and 'Missed_Sessions' in df_disp.columns: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
-        if hide_rookies and 'Total_Games' in df_disp.columns: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
-        if show_present_only and 'Is_Present' in df_disp.columns: df_disp = df_disp[df_disp['Is_Present'] == True]
+        if hide_inactive: df_disp = df_disp[df_disp['Missed_Sessions'] < 4]
+        if hide_rookies: df_disp = df_disp[df_disp['Total_Games'] >= config.ROOKIE_SHIELD_GAMES]
+        if show_present_only: df_disp = df_disp[df_disp['Is_Present'] == True]
         
         original_13 = ["Rank", "Player", "Tier", "MMR", "Peak", "+/-", "AOD", "APD", "Status", "Confidence", "Last Session", "Season Record", "Remarks"]
         final_cols = [c for c in original_13 if c in df_disp.columns]
         
-        st.dataframe(
-            df_disp[final_cols], 
-            width='stretch', 
-            hide_index=True,
-            column_config={
-                "AOD": st.column_config.NumberColumn("AOD", help="Opponent Difficulty."),
-                "APD": st.column_config.NumberColumn("APD", help="Partner Impact."),
-                "Confidence": st.column_config.TextColumn("Conf", help="Reliability."),
-                "Remarks": st.column_config.TextColumn("Remarks", width="large")
-            }
-        )
+        st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
     # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
@@ -307,7 +288,6 @@ if display_lb is not None:
                 if not duo_df.empty:
                     st.success(f"🤝 **Dynamic Duo:** {duo_df.iloc[0]['Teammate']} ({duo_df.iloc[0]['Win Rate']} WR)")
 
-            # Symmetrical display buttons
             c_a, c_b = st.columns(2)
             with c_a:
                 if st.button(f"Generate Teammate Matrix for {hero}", width='stretch'):
@@ -332,8 +312,13 @@ if display_lb is not None:
                 
             hist_df = engine.get_player_history(display_logs, hero)
             if hist_df is not None and not hist_df.empty:
-                st.line_chart(hist_df.iloc[::-1].reset_index(drop=True)['Balance'], use_container_width=True)
-                st.dataframe(hist_df, use_container_width=True, hide_index=True)
+                # Add Chronological Game Indexing
+                hist_disp = hist_df.iloc[::-1].copy() # Reverse to chronological order (Game 1 at top)
+                hist_disp.insert(0, "No.", [f"Game {i+1}" for i in range(len(hist_disp))])
+                
+                st.line_chart(hist_disp.reset_index(drop=True)['Balance'], use_container_width=True)
+                # Display chronologically (Game 1 at top) as a Ledger
+                st.dataframe(hist_disp, use_container_width=True, hide_index=True)
 
     # --- TAB 3: FAQ & PHILOSOPHY ---
     with tab3:
@@ -400,7 +385,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.1.1 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.1.2 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -423,4 +408,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.1 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.2 | Fadu & Friends Community Rankings | Manila 2026")
