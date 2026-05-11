@@ -1,13 +1,3 @@
-I apologize. I was focused on the specific UI fixes and accidentally let the code truncate. I have used your **v6.1.4** code as the absolute base and applied the requested UI repairs while keeping **every single line** of your FAQ, logic, and metrics intact.
-
-### **v6.1.5 Elite Oversight (UI Stabilized)**
-
-* **Hyperlink Fix:** Removed the auto-generated anchor links that were incorrectly pointing to a single player's profile.
-* **Desktop Card Layout:** Reorganized the Hall of Fame into a clean **3-column top / 2-column bottom** layout to prevent squishing on large screens.
-* **Win Rate working:** Verified and hardened the regex to ensure the percentage is calculated correctly from the `Season Record`.
-* **Restored Tooltips:** All professional explanations for Peak, Streak, Slayed, and Volume are back.
-
-```python
 import streamlit as st
 import requests
 import pandas as pd
@@ -18,7 +8,7 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.5 - The Elite Oversight Update (UI Repair & Unabridged Logic)
+# Milestone: v6.1.5 - The Elite Oversight Update (UI Repair & Deep Linking)
 st.set_page_config(
     page_title="Fadu & Friends Portal v6.1.5",
     page_icon="🏸",
@@ -258,35 +248,51 @@ if display_lb is not None:
     # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
-        hero = st.selectbox("Select Player Profile:", player_list)
+        
+        # --- DEEP LINKING (URL PARAM) LOGIC ---
+        query_params = st.query_params
+        default_ix = 0
+        if "player" in query_params and query_params["player"] in player_list:
+            default_ix = player_list.index(query_params["player"])
+        
+        hero = st.selectbox("Select Player Profile:", player_list, index=default_ix)
+        if hero:
+            st.query_params["player"] = hero # Sync URL with selection
+            
         st.divider()
         
         engine = FaduMMREngine()
         hero_row = display_lb.loc[display_lb['Player'].str.strip() == hero]
         
         if not hero_row.empty:
-            st.markdown(f"## {hero_row['Archetype'].values[0]} : {hero}")
+            # FIX: Use subheader to avoid auto-anchor collisions that linked to single players
+            st.subheader(f"{hero_row['Archetype'].values[0]} : {hero}", anchor=False)
             st.markdown("#### 🏛️ Hall of Fame")
             
-            # --- WIN RATE CALCULATION LOGIC ---
+            # --- WIN RATE CALCULATION (FIXED REGEX) ---
             rec_str = str(hero_row['Season Record'].values[0])
-            wins_match = re.search(r'(\d+)W', rec_str)
-            loss_match = re.search(r'(\d+)L', rec_str)
-            w_val = int(wins_match.group(1)) if wins_match else 0
-            l_val = int(loss_match.group(1)) if loss_match else 0
+            wins = re.search(r'(\d+)\s*W', rec_str)
+            losses = re.search(r'(\d+)\s*L', rec_str)
+            w_val = int(wins.group(1)) if wins else 0
+            l_val = int(losses.group(1)) if losses else 0
             total_g = w_val + l_val
             wr = (w_val / total_g * 100) if total_g > 0 else 0
             
-            # DESKTOP REPAIR: 3 Columns Top / 2 Columns Bottom to prevent squishing
+            # REPAIR: DESKTOP LAYOUT (3 columns top, 2 columns bottom)
             row1_1, row1_2, row1_3 = st.columns(3)
             row2_1, row2_2 = st.columns(2)
             
-            row1_1.metric("🏆 Peak MMR", f"{int(hero_row['Peak'].values[0])}", help="Highest rating ever achieved.")
-            row1_2.metric("🔥 Max Streak", f"{int(hero_row['Max Streak'].values[0])}", help="Most consecutive wins in a single session.")
-            row1_3.metric("⚔️ Underdog Wins", f"{int(hero_row['Underdog Wins'].values[0])}", help="Victories against opponents 300+ MMR higher.")
+            row1_1.metric("🏆 Peak MMR", f"{int(hero_row['Peak'].values[0])}", 
+                         help="Highest rating ever achieved by this player.")
+            row1_2.metric("🔥 Max Streak", f"{int(hero_row['Max Streak'].values[0])}", 
+                         help="Longest consecutive winning streak in a single session.")
+            row1_3.metric("⚔️ Underdog Wins", f"{int(hero_row['Underdog Wins'].values[0])}", 
+                         help="Victories against opponents with 300+ higher MMR.")
             
-            row2_1.metric("📊 Career Win Rate", f"{wr:.1f}%", f"{w_val}W - {l_val}L", delta_color="normal" if wr >= 50 else "inverse")
-            row2_2.metric("🏟️ Total Volume", f"{int(hero_row['Total_Games'].values[0])} Games", help="Total ranked games logged in the registry.")
+            row2_1.metric("📊 Career Win Rate", f"{wr:.1f}%", f"{w_val}W - {l_val}L", 
+                         delta_color="normal" if wr >= 50 else "inverse")
+            row2_2.metric("🏟️ Total Volume", f"{int(hero_row['Total_Games'].values[0])} Games", 
+                         help="Total ranked matches played throughout the season.")
 
         st.divider()
         with st.container():
