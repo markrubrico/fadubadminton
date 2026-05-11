@@ -373,8 +373,8 @@ if display_lb is not None:
                         mode='lines',
                         line_shape='vh',
                         fill='tozerox',
-                        fillcolor='rgba(0, 255, 136, 0.6)',
-                        line=dict(color='#00ff88', width=2),
+                        fillcolor='rgba(0, 255, 136, 0.7)',
+                        line=dict(color='#00ff88', width=3),
                         name=f"{hero} Momentum"
                     ))
 
@@ -385,8 +385,8 @@ if display_lb is not None:
                         mode='lines',
                         line_shape='vh',
                         fill='tozerox',
-                        fillcolor='rgba(255, 75, 75, 0.6)',
-                        line=dict(color='#ff4b4b', width=2),
+                        fillcolor='rgba(255, 75, 75, 0.7)',
+                        line=dict(color='#ff4b4b', width=3),
                         name=f"{rival} Momentum"
                     ))
                     
@@ -397,9 +397,15 @@ if display_lb is not None:
                             title=f"Net Lead (← {rival} | {hero} →)", 
                             range=[-limit, limit], 
                             showgrid=False,
+                            showticklabels=True,
                             zeroline=False
                         ),
-                        yaxis=dict(title="Game Number", autorange="reversed", showgrid=False),
+                        yaxis=dict(
+                            title="Game Number", 
+                            autorange="reversed", 
+                            showgrid=False,
+                            showticklabels=True
+                        ),
                         paper_bgcolor='rgba(0,0,0,0)',
                         plot_bgcolor='rgba(0,0,0,0)',
                         height=500,
