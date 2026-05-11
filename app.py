@@ -4,15 +4,15 @@ import pandas as pd
 import numpy as np
 import re
 import urllib.parse
-import plotly.express as px # New dependency for Rivalry Analytics
+import plotly.express as px 
 import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.2.0 - The Elite Oversight Update (Cumulative Tug-of-War & Full FAQ)
+# Milestone: v6.2.1 - The Elite Oversight Update (Scoreboard & Anchor)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.2.0",
+    page_title="Fadu & Friends Portal v6.2.1",
     page_icon="🏸",
     layout="wide"
 )
@@ -104,7 +104,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.2.0 | Elite Oversight")
+    st.caption("v6.2.1 | Scoreboard Elite")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -293,7 +293,7 @@ if display_lb is not None:
             total_g = w_val + l_val
             wr = (w_val / total_g * 100) if total_g > 0 else 0
             
-            # DESKTOP REPAIR: 3 Columns Top / 2 Columns Bottom to prevent squishing
+            # DESKTOP REPAIR: 3 Columns Top / 2 Columns Bottom
             row1_1, row1_2, row1_3 = st.columns(3)
             row2_1, row2_2 = st.columns(2)
             
@@ -340,33 +340,50 @@ if display_lb is not None:
             if st.button("Analyze Direct H2H", width='stretch'):
                 h2h = engine.get_h2h(display_logs, hero, rival)
                 if h2h and h2h["matches"]:
+                    # --- NEW: BOLD SCOREBOARD ---
                     st.write(f"### {hero} vs {rival}")
+                    st.markdown(f"## {hero} {h2h['p1_wins']} — {h2h['p2_wins']} {rival}")
                     
-                    # --- NEW: CUMULATIVE FRONTIER TUG-OF-WAR ---
-                    m_df = pd.DataFrame(h2h["matches"])
+                    # --- REVISED: FRONTIER TUG-OF-WAR WITH GAME 0 ---
+                    raw_m_df = pd.DataFrame(h2h["matches"])
                     
-                    # Calculate incremental advantage
-                    m_df['Point'] = m_df.apply(lambda x: 1 if hero in x['Winner'] else -1, axis=1)
-                    # Calculate cumulative territorial lead
+                    # Map the win direction (+1 for Hero, -1 for Rival)
+                    raw_m_df['Point'] = raw_m_df.apply(lambda x: 1 if hero in x['Winner'] else -1, axis=1)
+                    raw_m_df['Match_Outcome'] = raw_m_df['Point'].apply(lambda x: f"{hero} Win" if x == 1 else f"{rival} Win")
+                    
+                    # Construct Anchor Row (Game 0)
+                    start_row = pd.DataFrame([{
+                        "Date": "Start", "Winner": "N/A", "Loser": "N/A", 
+                        "Point": 0, "Frontier_Lead": 0, "Game": 0, 
+                        "Match_Outcome": "Starting State"
+                    }])
+                    
+                    # Append matches and calculate cumulative lead
+                    m_df = pd.concat([start_row, raw_m_df], ignore_index=True)
                     m_df['Frontier_Lead'] = m_df['Point'].cumsum()
-                    m_df['Match_Outcome'] = m_df['Point'].apply(lambda x: f"{hero} Win" if x == 1 else f"{rival} Win")
-                    m_df['Game'] = range(1, len(m_df) + 1)
+                    m_df['Game'] = range(0, len(m_df))
                     
-                    # Plotly Frontier lead chart
+                    # Plotly Chart
                     fig = px.bar(m_df, x='Frontier_Lead', y='Game', orientation='h',
-                                 title=f"The Frontier: Cumulative Win Lead ({hero} vs {rival})",
+                                 title=f"The Frontier: Territorial Win Lead Over Time",
                                  color='Match_Outcome',
-                                 color_discrete_map={f"{hero} Win": '#2ecc71', f"{rival} Win": '#e74c3c'},
+                                 color_discrete_map={
+                                     f"{hero} Win": '#2ecc71', 
+                                     f"{rival} Win": '#e74c3c', 
+                                     "Starting State": "#95a5a6"
+                                 },
                                  hover_data=['Date', 'Winner', 'Loser', 'Frontier_Lead'])
                     
-                    # Dynamic axis scaling based on max lead
                     max_l = max(abs(m_df['Frontier_Lead'].min()), abs(m_df['Frontier_Lead'].max())) + 1
-                    fig.update_layout(xaxis=dict(title="Territorial Lead (Net Wins)", range=[-max_l, max_l]),
-                                      yaxis=dict(autorange="reversed", title="Match Sequence (Chronological)"))
-                    fig.add_vline(x=0, line_color="black", line_width=2)
+                    fig.update_layout(
+                        xaxis=dict(title="Net Win Differential (Hero ← 0 → Rival)", range=[-max_l, max_l]),
+                        yaxis=dict(autorange="reversed", title="Sequence (0 = Start)")
+                    )
+                    # Thicker midline for "Neutral Territory"
+                    fig.add_vline(x=0, line_color="black", line_width=3)
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Style Matchup Cards
+                    # Style Matchup Cards (Side-by-side comparison)
                     rival_row = display_lb.loc[display_lb['Player'].str.strip() == rival]
                     if not rival_row.empty:
                         col_h, col_r = st.columns(2)
@@ -375,7 +392,7 @@ if display_lb is not None:
                         with col_r:
                             st.warning(f"**{rival} Style**\nAOD: {rival_row['AOD'].values[0]}\nAPD: {rival_row['APD'].values[0]}")
                     
-                    st.table(m_df[['Date', 'Winner', 'Loser']])
+                    st.table(raw_m_df[['Date', 'Winner', 'Loser']])
 
         st.divider()
         with st.expander("📜 Career Ledger & History", expanded=False):
@@ -385,11 +402,11 @@ if display_lb is not None:
                 
             hist_df = engine.get_player_history(display_logs, hero)
             if hist_df is not None and not hist_df.empty:
-                # 1. Start with chronological order to assign correct "Game X" numbers
+                # Chronological assignment for Game X numbering
                 hist_disp = hist_df.iloc[::-1].copy() 
                 hist_disp.insert(0, "No.", [f"Game {i+1}" for i in range(len(hist_disp))])
                 
-                # 2. Re-reverse for display (Latest games at the top)
+                # Descending view for display (Latest games at the top)
                 hist_final = hist_disp.iloc[::-1]
                 
                 st.line_chart(hist_final.reset_index(drop=True)['Balance'], use_container_width=True)
@@ -404,13 +421,7 @@ if display_lb is not None:
             **It’s not about who is better; it’s about making sure every session feels like a Finals match.**
             
             The math helps us build groups where everyone gets to play at their limit, ensuring no one is bored and no one is overwhelmed. 
-            The heart of our community lies in those "21-19" games—the ones where every serve matters and every rally is earned. 
             The MMR system is simply the compass we use to find that balance. 
-            
-            By tracking performance data, we can curate matchups where every player is challenged at their limit. This ensures a 
-            "Goldilocks" environment for everyone: **no one is overwhelmed by a massive skill gap, and no one is bored by an easy win.**
-            
-            There is still a lot of work to be done and we appreciate your support and suggestions. Thanks!
             """)
 
         with st.expander("📉 What are Rust Mechanics (Inactivity Decay)?"):
@@ -418,22 +429,13 @@ if display_lb is not None:
             **To keep the rankings active and accurate, we use a "Rust" system (Inactivity Decay).**
             
             * **The Rule:** If you miss **4 or more consecutive sessions**, your MMR begins to decay.
-            * **The Logic:** Badminton is a skill that requires timing and stamina. After a long break, a player's current performance rarely matches their peak. Decay ensures they don't hold an artificially high rank while inactive.
-            * **The System Benefit:** This prevents "MMR Hoarding" at the top and keeps the ecosystem moving. Once you return and play a session, the decay stops, and you can begin your climb back to your peak.
+            * **The Logic:** Skill fades with inactivity. Decay ensures they don't hold an artificially high rank while inactive.
             """)
 
         with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
             st.markdown("""
             We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
             **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
-            
-            Our goal is for you to look at these stats and find new goals:
-            * *Can I improve my win rate when playing my 15th game of the night?*
-            * *Who is the partner that truly complements my playstyle?*
-            * *How do I perform when I’m the 'Underdog' in a high-tier matchup?*
-            
-            Hopefully, this data offers another layer of enjoyment to the sport we love, giving us all something to talk about 
-            (and a little friendly trash talk) long after the lights at the court go out.
             """)
 
         with st.expander("🎭 Archetypes Legend"):
@@ -455,7 +457,6 @@ if display_lb is not None:
             If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
             - You receive an injection of up to **+80 MMR** on top of your base win points.
             - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
-            - Note: In v1.4.2, the MMR ceiling was removed, so all Tiers can now earn this bonus!
             """)
 
         with st.expander("🛡️ What is a Rookie Shield?"):
@@ -469,7 +470,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.2.0 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.2.1 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -492,4 +493,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.2.0 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.2.1 | Fadu & Friends Community Rankings | Manila 2026")
