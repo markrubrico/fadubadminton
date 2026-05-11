@@ -4,14 +4,15 @@ import pandas as pd
 import numpy as np
 import re
 import urllib.parse
+import plotly.express as px # New dependency for Rivalry Analytics
 import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.7 - The Elite Oversight Update (Tooltips & Rust FAQ)
+# Milestone: v6.1.8 - The Elite Oversight Update (Rivalry Visualization)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.7",
+    page_title="Fadu & Friends Portal v6.1.8",
     page_icon="🏸",
     layout="wide"
 )
@@ -103,7 +104,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.7 | Elite Oversight")
+    st.caption("v6.1.8 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -276,7 +277,7 @@ if display_lb is not None:
         if not hero_row.empty:
             st.subheader(f"{hero_row['Archetype'].values[0]} : {hero}", anchor=False)
             
-            # COPY-LINK UI (Streamlit standard)
+            # COPY-LINK UI
             safe_hero = urllib.parse.quote(hero)
             profile_url = f"https://faduscommunityrankings.streamlit.app/?player={safe_hero}"
             st.caption("📋 Share this Profile (Click icon to copy):")
@@ -339,6 +340,40 @@ if display_lb is not None:
                 h2h = engine.get_h2h(display_logs, hero, rival)
                 if h2h and h2h["matches"]:
                     st.write(f"### {hero} {h2h['p1_wins']} - {h2h['p2_wins']} {rival}")
+                    
+                    # --- NEW: RIVALRY MOMENTUM VISUALIZATION ---
+                    match_data = h2h["matches"]
+                    m_df = pd.DataFrame(match_data)
+                    
+                    # Calculate Cumulative Momentum (Up for Hero, Down for Rival)
+                    momentum = []
+                    current = 0
+                    for m in match_data:
+                        if hero in m['Winner']: current += 1
+                        else: current -= 1
+                        momentum.append(current)
+                    
+                    m_df['Momentum'] = momentum
+                    m_df['Game No'] = range(1, len(m_df) + 1)
+                    
+                    # 1. Momentum Chart (Tug of War)
+                    fig = px.line(m_df, x='Game No', y='Momentum', 
+                                 title=f"Rivalry Momentum: {hero} vs {rival}",
+                                 markers=True,
+                                 color_discrete_sequence=['#1f77b4'])
+                    fig.add_hline(y=0, line_dash="dash", line_color="gray")
+                    fig.update_layout(yaxis_title="Win Differential (Cumulative)")
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # 2. Style Matchup Cards
+                    rival_row = display_lb.loc[display_lb['Player'].str.strip() == rival]
+                    if not rival_row.empty:
+                        col_h, col_r = st.columns(2)
+                        with col_h:
+                            st.info(f"**{hero} Style**\nAOD: {hero_row['AOD'].values[0]}\nAPD: {hero_row['APD'].values[0]}")
+                        with col_r:
+                            st.warning(f"**{rival} Style**\nAOD: {rival_row['AOD'].values[0]}\nAPD: {rival_row['APD'].values[0]}")
+                    
                     st.table(pd.DataFrame(h2h["matches"]))
 
         st.divider()
@@ -355,85 +390,38 @@ if display_lb is not None:
                 st.line_chart(hist_final.reset_index(drop=True)['Balance'], use_container_width=True)
                 st.dataframe(hist_final, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: FAQ & PHILOSOPHY ---
+    # --- TAB 3: FAQ ---
     with tab3:
         st.subheader("📖 FAQ & Game Manual")
-        
-        with st.expander("🏸 Why are we tracking MMR?", expanded=True):
+        with st.expander("🏸 Why MMR?", expanded=True):
+            st.markdown("It’s about parity. We ensure no one is overwhelmed and no one is bored.")
+        with st.expander("📉 What are Rust Mechanics?"):
             st.markdown("""
-            **It’s not about who is better; it’s about making sure every session feels like a Finals match.**
-            
-            The math helps us build groups where everyone gets to play at their limit, ensuring no one is bored and no one is overwhelmed. 
-            The heart of our community lies in those "21-19" games—the ones where every serve matters and every rally is earned. 
-            The MMR system is simply the compass we use to find that balance. 
+            * **Rule:** If you miss 4+ consecutive sessions, MMR decays.
+            * **Logic:** Skill fades with inactivity. Rust ensures rankings stay active and peak performance is earned.
             """)
-
-        with st.expander("📉 What are Rust Mechanics (Inactivity Decay)?"):
-            st.markdown("""
-            **To keep the rankings active and accurate, we use a "Rust" system (Inactivity Decay).**
-            
-            * **The Rule:** If you miss **4 or more consecutive sessions**, your MMR begins to decay.
-            * **The Logic:** Badminton is a skill that requires timing and stamina. After a long break, a player's current performance rarely matches their peak. Decay ensures they don't hold an artificially high rank while inactive.
-            * **The System Benefit:** This prevents "MMR Hoarding" at the top and keeps the ecosystem moving. Once you return and play a session, the decay stops, and you can begin your climb back to your peak.
-            """)
-
-        with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
-            st.markdown("""
-            We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
-            **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
-            """)
-
         with st.expander("🎭 Archetypes Legend"):
-            st.write("""
-            - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
-            - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
-            - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
-            - **⚔️ Giant Slayer:** Multiple underdog wins against players 300+ MMR higher than you.
-            - **🔥 The Finisher:** Master of momentum with high session win streaks (4+).
-            - **🦾 Iron Man:** High stamina and volume (30% more games than league average).
-            - **🎯 The Specialist:** High efficiency winner with a 58%+ win rate.
-            - **🐣 New Challenger:** Players still in the Rookie calibration phase.
-            - **🏸 Consistent Force:** The reliable backbone of the community.
-            """)
-
-        with st.expander("⚔️ How does the Underdog (Giant Slayer) Bonus work?"):
-            st.write("""
-            If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
-            - You receive an injection of up to **+80 MMR** on top of your base win points.
-            """)
-
-        with st.expander("🛡️ What is a Rookie Shield?"):
-            st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. You gain full MMR for wins, but lose only -10 MMR on losses.")
-
+            st.write("- **🎖️ The General:** Legend+ who elevates partners.\n- **🧪 The Catalyst:** High Force Multiplier (APD).\n- **🛡️ The Tank:** Faces the toughest schedule (AOD).\n- **⚔️ Giant Slayer:** Upsets opponents 300+ MMR higher.")
         with st.expander("💠 What are the Tiers?"):
             st.table(pd.DataFrame([
                 {"Tier": "Master", "MMR Range": "1000-1499"}, {"Tier": "Grandmaster", "MMR Range": "1500-1899"},
                 {"Tier": "Epic", "MMR Range": "1900-2299"}, {"Tier": "Legend", "MMR Range": "2300-2699"},
                 {"Tier": "Mythic", "MMR Range": "2700-3199"}, {"Tier": "Mythic Glory", "MMR Range": "3200+"}
             ]))
-        
-        st.divider()
-        st.info("💡 **Note:** v6.1.7 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 v6.1.8 Calibration: Rust is active.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
-# --- ADMIN OPERATIONAL OVERSIGHT (BOTTOM) ---
+# --- ADMIN OVERSIGHT ---
 if is_admin:
     st.divider()
-    st.subheader("📊 Operational Oversight")
-    
     if 'decayed' in st.session_state:
-        with st.expander("📉 Inactivity Decay Report (Rust Log)", expanded=False):
+        with st.expander("📉 Inactivity Decay Report", expanded=False):
             if st.session_state.decayed:
-                decay_df = pd.DataFrame(st.session_state.decayed)
-                st.warning(f"Total Wealth Drift (Inactivity Penalty): {decay_df['Penalty'].sum()}")
-                st.table(decay_df)
-            else:
-                st.success("No players currently in rust decay.")
-    
-    if 'drift' in st.session_state:
-        st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
+                st.table(pd.DataFrame(st.session_state.decayed))
+            else: st.success("No active rust.")
+    if 'drift' in st.session_state: st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.7 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.8 | Fadu & Friends Community Rankings | Manila 2026")
