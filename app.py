@@ -11,9 +11,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.2.3 - Frontier Momentum Update (Stepped Area Chart Refinement)
+# Milestone: v6.2.4 - Elite Broadcast Update (Dark-Mode Frontier)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.2.3",
+    page_title="Fadu & Friends Portal v6.2.4",
     page_icon="🏸",
     layout="wide"
 )
@@ -105,7 +105,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.2.3 | Frontier Momentum")
+    st.caption("v6.2.4 | Frontier Momentum")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -373,8 +373,8 @@ if display_lb is not None:
                         mode='lines',
                         line_shape='vh',
                         fill='tozerox',
-                        fillcolor='rgba(46, 204, 113, 0.45)',
-                        line=dict(color='#2ecc71', width=3),
+                        fillcolor='rgba(0, 255, 136, 0.6)',
+                        line=dict(color='#00ff88', width=2),
                         name=f"{hero} Momentum"
                     ))
 
@@ -385,20 +385,27 @@ if display_lb is not None:
                         mode='lines',
                         line_shape='vh',
                         fill='tozerox',
-                        fillcolor='rgba(231, 76, 60, 0.45)',
-                        line=dict(color='#e74c3c', width=3),
+                        fillcolor='rgba(255, 75, 75, 0.6)',
+                        line=dict(color='#ff4b4b', width=2),
                         name=f"{rival} Momentum"
                     ))
                     
                     limit = max([abs(x) for x in x_history]) + 1
                     fig.update_layout(
-                        xaxis=dict(title=f"Net Lead (← {rival} | {hero} →)", range=[-limit, limit], gridcolor='whitesmoke'),
-                        yaxis=dict(title="Game Number", autorange="reversed", gridcolor='whitesmoke'),
-                        plot_bgcolor='white',
+                        template='plotly_dark',
+                        xaxis=dict(
+                            title=f"Net Lead (← {rival} | {hero} →)", 
+                            range=[-limit, limit], 
+                            showgrid=False,
+                            zeroline=False
+                        ),
+                        yaxis=dict(title="Game Number", autorange="reversed", showgrid=False),
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(0,0,0,0)',
                         height=500,
                         showlegend=False
                     )
-                    fig.add_vline(x=0, line_color="black", line_width=2)
+                    fig.add_vline(x=0, line_color="white", line_width=3)
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Style Matchup Cards (Side-by-side comparison)
@@ -489,7 +496,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.2.3 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.2.4 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -512,4 +519,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.2.3 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.2.4 | Fadu & Friends Community Rankings | Manila 2026")
