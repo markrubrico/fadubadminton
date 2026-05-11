@@ -5,14 +5,15 @@ import numpy as np
 import re
 import urllib.parse
 import plotly.express as px 
+import plotly.graph_objects as go
 import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.2.2 - The Frontier Update (Stepped Area Chart & Neutral Anchor)
+# Milestone: v6.2.3 - Frontier Momentum Update (Stepped Area Chart Refinement)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.2.2",
+    page_title="Fadu & Friends Portal v6.2.3",
     page_icon="🏸",
     layout="wide"
 )
@@ -104,7 +105,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.2.2 | The Frontier")
+    st.caption("v6.2.3 | Frontier Momentum")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -344,43 +345,60 @@ if display_lb is not None:
                     st.write(f"### {hero} vs {rival}")
                     st.markdown(f"## {hero} {h2h['p1_wins']} — {h2h['p2_wins']} {rival}")
                     
-                    # --- REVISED: FRONTIER TUG-OF-WAR WITH GAME 0 ---
-                    raw_m_df = pd.DataFrame(h2h["matches"])
+                    # --- FRONTIER MOMENTUM: STEPPED AREA LOGIC ---
+                    matches = h2h["matches"]
+                    x_history = [0]
+                    y_history = [0]
+                    current_lead = 0
                     
-                    # Map the win direction (+1 for Hero, -1 for Rival)
-                    raw_m_df['Point'] = raw_m_df.apply(lambda x: 1 if hero in x['Winner'] else -1, axis=1)
-                    raw_m_df['Match_Outcome'] = raw_m_df['Point'].apply(lambda x: f"{hero} Win" if x == 1 else f"{rival} Win")
+                    for i, match in enumerate(matches, 1):
+                        # Identify winner and determine lead direction
+                        point = 1 if hero in match['Winner'] else -1
+                        
+                        # First point: Stay at current lead, move to current game start (Vertical rise)
+                        x_history.append(current_lead)
+                        y_history.append(i)
+                        
+                        # Second point: Step to new lead at current game end (Horizontal move)
+                        current_lead += point
+                        x_history.append(current_lead)
+                        y_history.append(i)
+
+                    fig = go.Figure()
+
+                    # Hero Territory (Positive Lead)
+                    fig.add_trace(go.Scatter(
+                        x=[max(0, x) for x in x_history],
+                        y=y_history,
+                        mode='lines',
+                        line_shape='vh',
+                        fill='tozerox',
+                        fillcolor='rgba(46, 204, 113, 0.45)',
+                        line=dict(color='#2ecc71', width=3),
+                        name=f"{hero} Momentum"
+                    ))
+
+                    # Rival Territory (Negative Lead)
+                    fig.add_trace(go.Scatter(
+                        x=[min(0, x) for x in x_history],
+                        y=y_history,
+                        mode='lines',
+                        line_shape='vh',
+                        fill='tozerox',
+                        fillcolor='rgba(231, 76, 60, 0.45)',
+                        line=dict(color='#e74c3c', width=3),
+                        name=f"{rival} Momentum"
+                    ))
                     
-                    # Construct Anchor Row (Game 0)
-                    start_row = pd.DataFrame([{
-                        "Date": "Start", "Winner": "N/A", "Loser": "N/A", 
-                        "Point": 0, "Frontier_Lead": 0, "Game": 0, 
-                        "Match_Outcome": "Starting State"
-                    }])
-                    
-                    # Append matches and calculate cumulative lead
-                    m_df = pd.concat([start_row, raw_m_df], ignore_index=True)
-                    m_df['Frontier_Lead'] = m_df['Point'].cumsum()
-                    m_df['Game'] = range(0, len(m_df))
-                    
-                    # Plotly Chart
-                    fig = px.bar(m_df, x='Frontier_Lead', y='Game', orientation='h',
-                                 title=f"The Frontier: Territorial Win Lead Over Time",
-                                 color='Match_Outcome',
-                                 color_discrete_map={
-                                     f"{hero} Win": '#2ecc71', 
-                                     f"{rival} Win": '#e74c3c', 
-                                     "Starting State": "#95a5a6"
-                                 },
-                                 hover_data=['Date', 'Winner', 'Loser', 'Frontier_Lead'])
-                    
-                    max_l = max(abs(m_df['Frontier_Lead'].min()), abs(m_df['Frontier_Lead'].max())) + 1
+                    limit = max([abs(x) for x in x_history]) + 1
                     fig.update_layout(
-                        xaxis=dict(title="Net Win Differential (Hero ← 0 → Rival)", range=[-max_l, max_l]),
-                        yaxis=dict(autorange="reversed", title="Sequence (0 = Start)")
+                        xaxis=dict(title=f"Net Lead (← {rival} | {hero} →)", range=[-limit, limit], gridcolor='whitesmoke'),
+                        yaxis=dict(title="Game Number", autorange="reversed", gridcolor='whitesmoke'),
+                        plot_bgcolor='white',
+                        height=500,
+                        showlegend=False
                     )
-                    # Thicker midline for "Neutral Territory"
-                    fig.add_vline(x=0, line_color="black", line_width=3)
+                    fig.add_vline(x=0, line_color="black", line_width=2)
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Style Matchup Cards (Side-by-side comparison)
@@ -392,6 +410,7 @@ if display_lb is not None:
                         with col_r:
                             st.warning(f"**{rival} Style**\nAOD: {rival_row['AOD'].values[0]}\nAPD: {rival_row['APD'].values[0]}")
                     
+                    raw_m_df = pd.DataFrame(h2h["matches"])
                     st.table(raw_m_df[['Date', 'Winner', 'Loser']])
 
         st.divider()
@@ -470,7 +489,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.2.2 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.2.3 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -493,4 +512,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.2.2 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.2.3 | Fadu & Friends Community Rankings | Manila 2026")
