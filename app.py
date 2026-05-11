@@ -2,14 +2,15 @@ import streamlit as st
 import requests
 import pandas as pd
 import numpy as np
+import re
 import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.3 - The Elite Oversight Update (Descending Career Ledger)
+# Milestone: v6.1.4 - The Elite Oversight Update (Win Rate Metrics)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.3",
+    page_title="Fadu & Friends Portal v6.1.4",
     page_icon="🏸",
     layout="wide"
 )
@@ -101,7 +102,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.3 | Elite Oversight")
+    st.caption("v6.1.4 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -173,7 +174,6 @@ if is_admin and 'lb' in st.session_state:
 else:
     display_lb, display_logs = public_lb, public_logs
     if display_logs:
-        import re
         all_dates = re.findall(r'^(\d{1,2}-[A-Za-z]+)', display_logs, re.MULTILINE)
         session_date = all_dates[-1] if all_dates else "Latest Session"
     else:
@@ -257,12 +257,26 @@ if display_lb is not None:
         if not hero_row.empty:
             st.markdown(f"## {hero_row['Archetype'].values[0]} : {hero}")
             st.markdown("#### 🏛️ Hall of Fame")
-            f1, f2 = st.columns(2)
-            f3, f4 = st.columns(2)
+            
+            # --- WIN RATE CALCULATION LOGIC ---
+            rec_str = str(hero_row['Season Record'].values[0])
+            wins = re.search(r'(\d+)W', rec_str)
+            losses = re.search(r'(\d+)L', rec_str)
+            w_val = int(wins.group(1)) if wins else 0
+            l_val = int(losses.group(1)) if losses else 0
+            total_g = w_val + l_val
+            wr = (w_val / total_g * 100) if total_g > 0 else 0
+            
+            f1, f2, f3 = st.columns(3)
+            f4, f5 = st.columns(2)
+            
             f1.metric("🏆 Peak", f"{int(hero_row['Peak'].values[0])}")
             f2.metric("🔥 Streak", f"{int(hero_row['Max Streak'].values[0])}")
             f3.metric("⚔️ Slayed", f"{int(hero_row['Underdog Wins'].values[0])}")
-            f4.metric("📈 Record", hero_row['Season Record'].values[0])
+            
+            f4.metric("📈 Win Rate", f"{wr:.1f}%", f"{hero_row['Season Record'].values[0]}", 
+                      delta_color="normal" if wr >= 50 else "inverse")
+            f5.metric("🏟️ Games", f"{int(hero_row['Total_Games'].values[0])}")
 
         st.divider()
         with st.container():
@@ -386,7 +400,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.1.3 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.1.4 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -409,4 +423,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.3 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.4 | Fadu & Friends Community Rankings | Manila 2026")
