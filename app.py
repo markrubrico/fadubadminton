@@ -10,9 +10,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.9 - The Elite Oversight Update (Horizontal H2H & Full FAQ)
+# Milestone: v6.2.0 - The Elite Oversight Update (Cumulative Tug-of-War & Full FAQ)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.9",
+    page_title="Fadu & Friends Portal v6.2.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -104,7 +104,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.9 | Elite Oversight")
+    st.caption("v6.2.0 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -342,21 +342,28 @@ if display_lb is not None:
                 if h2h and h2h["matches"]:
                     st.write(f"### {hero} vs {rival}")
                     
-                    # --- NEW: HORIZONTAL TUG-OF-WAR VISUAL ---
+                    # --- NEW: CUMULATIVE FRONTIER TUG-OF-WAR ---
                     m_df = pd.DataFrame(h2h["matches"])
-                    m_df['Advantage'] = m_df.apply(lambda x: 1 if hero in x['Winner'] else -1, axis=1)
-                    m_df['Winner_Color'] = m_df['Advantage'].apply(lambda x: hero if x == 1 else rival)
+                    
+                    # Calculate incremental advantage
+                    m_df['Point'] = m_df.apply(lambda x: 1 if hero in x['Winner'] else -1, axis=1)
+                    # Calculate cumulative territorial lead
+                    m_df['Frontier_Lead'] = m_df['Point'].cumsum()
+                    m_df['Match_Outcome'] = m_df['Point'].apply(lambda x: f"{hero} Win" if x == 1 else f"{rival} Win")
                     m_df['Game'] = range(1, len(m_df) + 1)
                     
-                    fig = px.bar(m_df, x='Advantage', y='Game', orientation='h',
-                                 title=f"H2H Tug-of-War: {hero} (Right) vs {rival} (Left)",
-                                 color='Winner_Color',
-                                 color_discrete_map={hero: '#2ecc71', rival: '#e74c3c'},
-                                 hover_data=['Date', 'Winner', 'Loser'])
+                    # Plotly Frontier lead chart
+                    fig = px.bar(m_df, x='Frontier_Lead', y='Game', orientation='h',
+                                 title=f"The Frontier: Cumulative Win Lead ({hero} vs {rival})",
+                                 color='Match_Outcome',
+                                 color_discrete_map={f"{hero} Win": '#2ecc71', f"{rival} Win": '#e74c3c'},
+                                 hover_data=['Date', 'Winner', 'Loser', 'Frontier_Lead'])
                     
-                    fig.update_layout(xaxis=dict(tickmode='array', tickvals=[-1, 1], ticktext=[rival, hero], range=[-1.2, 1.2]),
-                                      yaxis=dict(autorange="reversed", title="Match Sequence"))
-                    fig.add_vline(x=0, line_color="black")
+                    # Dynamic axis scaling based on max lead
+                    max_l = max(abs(m_df['Frontier_Lead'].min()), abs(m_df['Frontier_Lead'].max())) + 1
+                    fig.update_layout(xaxis=dict(title="Territorial Lead (Net Wins)", range=[-max_l, max_l]),
+                                      yaxis=dict(autorange="reversed", title="Match Sequence (Chronological)"))
+                    fig.add_vline(x=0, line_color="black", line_width=2)
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Style Matchup Cards
@@ -462,7 +469,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.1.9 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.2.0 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -485,4 +492,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.9 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.2.0 | Fadu & Friends Community Rankings | Manila 2026")
