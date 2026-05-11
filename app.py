@@ -3,14 +3,15 @@ import requests
 import pandas as pd
 import numpy as np
 import re
+import urllib.parse
 import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.5 - The Elite Oversight Update (UI Repair & Deep Linking)
+# Milestone: v6.1.6 - The Elite Oversight Update (Hardened WR & Deep Link UI)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.5",
+    page_title="Fadu & Friends Portal v6.1.6",
     page_icon="🏸",
     layout="wide"
 )
@@ -102,7 +103,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.5 | Elite Oversight")
+    st.caption("v6.1.6 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -265,34 +266,39 @@ if display_lb is not None:
         hero_row = display_lb.loc[display_lb['Player'].str.strip() == hero]
         
         if not hero_row.empty:
-            # FIX: Use subheader to avoid auto-anchor collisions that linked to single players
+            # UI REPAIR: Subheader without anchors to fix broken hyperlink hovering
             st.subheader(f"{hero_row['Archetype'].values[0]} : {hero}", anchor=False)
+            
+            # HYPERLINK RESTORATION: Clear Shareable Link
+            safe_hero = urllib.parse.quote(hero)
+            profile_url = f"https://faduscommunityrankings.streamlit.app/?player={safe_hero}"
+            st.caption(f"[🔗 Copy Direct Profile Link]({profile_url})")
+
             st.markdown("#### 🏛️ Hall of Fame")
             
-            # --- WIN RATE CALCULATION (FIXED REGEX) ---
+            # --- HARDENED WIN RATE LOGIC ---
             rec_str = str(hero_row['Season Record'].values[0])
-            wins = re.search(r'(\d+)\s*W', rec_str)
-            losses = re.search(r'(\d+)\s*L', rec_str)
-            w_val = int(wins.group(1)) if wins else 0
-            l_val = int(losses.group(1)) if losses else 0
+            nums = re.findall(r'(\d+)', rec_str)
+            w_val = int(nums[0]) if len(nums) > 0 else 0
+            l_val = int(nums[1]) if len(nums) > 1 else 0
             total_g = w_val + l_val
             wr = (w_val / total_g * 100) if total_g > 0 else 0
             
-            # REPAIR: DESKTOP LAYOUT (3 columns top, 2 columns bottom)
+            # DESKTOP LAYOUT (3 columns top, 2 columns bottom)
             row1_1, row1_2, row1_3 = st.columns(3)
             row2_1, row2_2 = st.columns(2)
             
             row1_1.metric("🏆 Peak MMR", f"{int(hero_row['Peak'].values[0])}", 
-                         help="Highest rating ever achieved by this player.")
+                         help="Highest rating ever achieved.")
             row1_2.metric("🔥 Max Streak", f"{int(hero_row['Max Streak'].values[0])}", 
-                         help="Longest consecutive winning streak in a single session.")
+                         help="Most wins in a single session.")
             row1_3.metric("⚔️ Underdog Wins", f"{int(hero_row['Underdog Wins'].values[0])}", 
-                         help="Victories against opponents with 300+ higher MMR.")
+                         help="Wins vs opponents 300+ higher MMR.")
             
             row2_1.metric("📊 Career Win Rate", f"{wr:.1f}%", f"{w_val}W - {l_val}L", 
                          delta_color="normal" if wr >= 50 else "inverse")
             row2_2.metric("🏟️ Total Volume", f"{int(hero_row['Total_Games'].values[0])} Games", 
-                         help="Total ranked matches played throughout the season.")
+                         help="Total ranked matches played.")
 
         st.divider()
         with st.container():
@@ -341,11 +347,11 @@ if display_lb is not None:
                 
             hist_df = engine.get_player_history(display_logs, hero)
             if hist_df is not None and not hist_df.empty:
-                # 1. Start with chronological order to assign correct "Game X" numbers
+                # Chronological assignment for Game X numbering
                 hist_disp = hist_df.iloc[::-1].copy() 
                 hist_disp.insert(0, "No.", [f"Game {i+1}" for i in range(len(hist_disp))])
                 
-                # 2. Re-reverse for display (Latest games at the top)
+                # Descending view for display
                 hist_final = hist_disp.iloc[::-1]
                 
                 st.line_chart(hist_final.reset_index(drop=True)['Balance'], use_container_width=True)
@@ -362,25 +368,12 @@ if display_lb is not None:
             The math helps us build groups where everyone gets to play at their limit, ensuring no one is bored and no one is overwhelmed. 
             The heart of our community lies in those "21-19" games—the ones where every serve matters and every rally is earned. 
             The MMR system is simply the compass we use to find that balance. 
-            
-            By tracking performance data, we can curate matchups where every player is challenged at their limit. This ensures a 
-            "Goldilocks" environment for everyone: **no one is overwhelmed by a massive skill gap, and no one is bored by an easy win.**
-            
-            There is still a lot of work to be done and we appreciate your support and suggestions. Thanks!
             """)
 
         with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
             st.markdown("""
             We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
             **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
-            
-            Our goal is for you to look at these stats and find new goals:
-            * *Can I improve my win rate when playing my 15th game of the night?*
-            * *Who is the partner that truly complements my playstyle?*
-            * *How do I perform when I’m the 'Underdog' in a high-tier matchup?*
-            
-            Hopefully, this data offers another layer of enjoyment to the sport we love, giving us all something to talk about 
-            (and a little friendly trash talk) long after the lights at the court go out.
             """)
 
         with st.expander("🎭 Archetypes Legend"):
@@ -402,7 +395,6 @@ if display_lb is not None:
             If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
             - You receive an injection of up to **+80 MMR** on top of your base win points.
             - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
-            - Note: In v1.4.2, the MMR ceiling was removed, so all Tiers can now earn this bonus!
             """)
 
         with st.expander("🛡️ What is a Rookie Shield?"):
@@ -416,7 +408,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.1.5 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.1.6 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -439,4 +431,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.5 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.6 | Fadu & Friends Community Rankings | Manila 2026")
