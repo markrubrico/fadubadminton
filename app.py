@@ -9,9 +9,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.1.6 - The Elite Oversight Update (Hardened WR & Deep Link UI)
+# Milestone: v6.1.7 - The Elite Oversight Update (Tooltips & Rust FAQ)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.1.6",
+    page_title="Fadu & Friends Portal v6.1.7",
     page_icon="🏸",
     layout="wide"
 )
@@ -103,7 +103,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.1.6 | Elite Oversight")
+    st.caption("v6.1.7 | Elite Oversight")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -198,18 +198,22 @@ if display_lb is not None:
         if not present_df.empty:
             if '+/-' in present_df.columns:
                 mvp_row = present_df.loc[present_df['+/-'].idxmax()]
-                m_col1.metric("🔥 Session MVP", mvp_row['Player'], f"+{int(mvp_row['+/-'])}", help="Highest gain today.")
+                m_col1.metric("🔥 Session MVP", mvp_row['Player'], f"+{int(mvp_row['+/-'])}", 
+                             help="Highest MMR gain in the latest session. The dominant force of the day.")
                 
             if 'APD' in present_df.columns:
                 carry_row = present_df.loc[present_df['APD'].idxmin()]
-                m_col2.metric("🏋️ Session Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", help="Most weight lifted today.")
+                m_col2.metric("🏋️ Session Carry", carry_row['Player'], f"{int(carry_row['APD'])} APD", 
+                             help="The player who overcame the toughest Partner Impact (APD), lifting their teammates to victory.")
 
             if 'AOD' in present_df.columns:
                 tank_row = present_df.loc[present_df['AOD'].idxmax()]
-                m_col3.metric("🛡️ Session Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", help="Toughest schedule today.")
+                m_col3.metric("🛡️ Session Tank", tank_row['Player'], f"{int(tank_row['AOD'])} AOD", 
+                             help="The player who faced the highest Opponent Difficulty (AOD) today. The frontline of the session.")
             
             if 'MMR' in present_df.columns:
-                m_col4.metric("📉 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR")
+                m_col4.metric("📉 Session Intensity", f"{int(present_df['MMR'].mean())}", "Avg MMR", 
+                             help="The average MMR of all players present today. A measure of the session's overall skill ceiling.")
         else:
             st.caption("No active session data available for highlights.")
 
@@ -220,18 +224,22 @@ if display_lb is not None:
         h_col3, h_col4 = st.columns(2)
 
         leader = display_lb.iloc[0]
-        h_col1.metric("🏆 League Leader", leader['Player'], f"Rank #1 ({leader['Tier']})")
+        h_col1.metric("🏆 League Leader", leader['Player'], f"Rank #1 ({leader['Tier']})", 
+                     help="The current highest-rated player in the community.")
 
         if 'Total_Games' in display_lb.columns:
             ironman_row = display_lb.loc[display_lb['Total_Games'].idxmax()]
-            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G")
+            h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G", 
+                         help="The player with the highest total game volume this season. Pure dedication.")
 
         improved_row = display_lb.loc[(display_lb['MMR'] - display_lb['Peak'].min()).idxmax()]
-        h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR")
+        h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR", 
+                     help="The largest climb from a player's starting floor to their current standing.")
 
         if 'Underdog Wins' in display_lb.columns:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
-            h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays")
+            h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays", 
+                         help="The master of upsets. Most wins against opponents rated 300+ points higher.")
 
         st.divider()
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
@@ -250,7 +258,7 @@ if display_lb is not None:
     with tab2:
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         
-        # --- DEEP LINKING (URL PARAM) LOGIC ---
+        # --- DEEP LINKING LOGIC ---
         query_params = st.query_params
         default_ix = 0
         if "player" in query_params and query_params["player"] in player_list:
@@ -258,7 +266,7 @@ if display_lb is not None:
         
         hero = st.selectbox("Select Player Profile:", player_list, index=default_ix)
         if hero:
-            st.query_params["player"] = hero # Sync URL with selection
+            st.query_params["player"] = hero
             
         st.divider()
         
@@ -266,13 +274,13 @@ if display_lb is not None:
         hero_row = display_lb.loc[display_lb['Player'].str.strip() == hero]
         
         if not hero_row.empty:
-            # UI REPAIR: Subheader without anchors to fix broken hyperlink hovering
             st.subheader(f"{hero_row['Archetype'].values[0]} : {hero}", anchor=False)
             
-            # HYPERLINK RESTORATION: Clear Shareable Link
+            # COPY-LINK UI (Streamlit standard)
             safe_hero = urllib.parse.quote(hero)
             profile_url = f"https://faduscommunityrankings.streamlit.app/?player={safe_hero}"
-            st.caption(f"[🔗 Copy Direct Profile Link]({profile_url})")
+            st.caption("📋 Share this Profile (Click icon to copy):")
+            st.code(profile_url, language=None)
 
             st.markdown("#### 🏛️ Hall of Fame")
             
@@ -284,21 +292,15 @@ if display_lb is not None:
             total_g = w_val + l_val
             wr = (w_val / total_g * 100) if total_g > 0 else 0
             
-            # DESKTOP LAYOUT (3 columns top, 2 columns bottom)
             row1_1, row1_2, row1_3 = st.columns(3)
             row2_1, row2_2 = st.columns(2)
             
-            row1_1.metric("🏆 Peak MMR", f"{int(hero_row['Peak'].values[0])}", 
-                         help="Highest rating ever achieved.")
-            row1_2.metric("🔥 Max Streak", f"{int(hero_row['Max Streak'].values[0])}", 
-                         help="Most wins in a single session.")
-            row1_3.metric("⚔️ Underdog Wins", f"{int(hero_row['Underdog Wins'].values[0])}", 
-                         help="Wins vs opponents 300+ higher MMR.")
+            row1_1.metric("🏆 Peak MMR", f"{int(hero_row['Peak'].values[0])}", help="Highest rating ever achieved.")
+            row1_2.metric("🔥 Max Streak", f"{int(hero_row['Max Streak'].values[0])}", help="Most wins in a single session.")
+            row1_3.metric("⚔️ Underdog Wins", f"{int(hero_row['Underdog Wins'].values[0])}", help="Wins vs opponents 300+ higher MMR.")
             
-            row2_1.metric("📊 Career Win Rate", f"{wr:.1f}%", f"{w_val}W - {l_val}L", 
-                         delta_color="normal" if wr >= 50 else "inverse")
-            row2_2.metric("🏟️ Total Volume", f"{int(hero_row['Total_Games'].values[0])} Games", 
-                         help="Total ranked matches played.")
+            row2_1.metric("📊 Career Win Rate", f"{wr:.1f}%", f"{w_val}W - {l_val}L", delta_color="normal" if wr >= 50 else "inverse")
+            row2_2.metric("🏟️ Total Volume", f"{int(hero_row['Total_Games'].values[0])} Games", help="Total ranked matches played.")
 
         st.divider()
         with st.container():
@@ -347,13 +349,9 @@ if display_lb is not None:
                 
             hist_df = engine.get_player_history(display_logs, hero)
             if hist_df is not None and not hist_df.empty:
-                # Chronological assignment for Game X numbering
                 hist_disp = hist_df.iloc[::-1].copy() 
                 hist_disp.insert(0, "No.", [f"Game {i+1}" for i in range(len(hist_disp))])
-                
-                # Descending view for display
                 hist_final = hist_disp.iloc[::-1]
-                
                 st.line_chart(hist_final.reset_index(drop=True)['Balance'], use_container_width=True)
                 st.dataframe(hist_final, use_container_width=True, hide_index=True)
 
@@ -370,6 +368,15 @@ if display_lb is not None:
             The MMR system is simply the compass we use to find that balance. 
             """)
 
+        with st.expander("📉 What are Rust Mechanics (Inactivity Decay)?"):
+            st.markdown("""
+            **To keep the rankings active and accurate, we use a "Rust" system (Inactivity Decay).**
+            
+            * **The Rule:** If you miss **4 or more consecutive sessions**, your MMR begins to decay.
+            * **The Logic:** Badminton is a skill that requires timing and stamina. After a long break, a player's current performance rarely matches their peak. Decay ensures they don't hold an artificially high rank while inactive.
+            * **The System Benefit:** This prevents "MMR Hoarding" at the top and keeps the ecosystem moving. Once you return and play a session, the decay stops, and you can begin your climb back to your peak.
+            """)
+
         with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
             st.markdown("""
             We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
@@ -378,7 +385,6 @@ if display_lb is not None:
 
         with st.expander("🎭 Archetypes Legend"):
             st.write("""
-            Your **Archetype** is determined by your career stats and playstyle:
             - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
             - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
             - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
@@ -394,7 +400,6 @@ if display_lb is not None:
             st.write("""
             If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
             - You receive an injection of up to **+80 MMR** on top of your base win points.
-            - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
             """)
 
         with st.expander("🛡️ What is a Rookie Shield?"):
@@ -408,7 +413,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.1.6 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.1.7 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -431,4 +436,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.1.6 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.1.7 | Fadu & Friends Community Rankings | Manila 2026")
