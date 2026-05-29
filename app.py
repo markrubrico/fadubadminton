@@ -11,9 +11,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.2.4 - Elite Broadcast Update (Dark-Mode Frontier)
+# Milestone: v6.2.7 - Elite Broadcast Update (Dark-Mode Frontier)
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.2.4",
+    page_title="Fadu & Friends Portal v6.2.7",
     page_icon="🏸",
     layout="wide"
 )
@@ -105,7 +105,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.2.4 | Frontier Momentum")
+    st.caption("v6.2.7 | Frontier Momentum")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -456,6 +456,46 @@ if display_lb is not None:
             The MMR system is simply the compass we use to find that balance. 
             """)
 
+        with st.expander("📊 What is APD (Average Partner Delta)?"):
+            st.markdown(r"""
+            **APD stands for Average Partner Delta.** In 2v2 badminton, this is your **"Carrying Metric"**. 
+            It calculates the average MMR difference between you and the partner sharing your side of the court.
+
+            **While AOD looks at who you are fighting, APD looks at who is helping you.**
+
+            **Why does it matter? (The Badminton Example)**
+            *   **Player X** has a high win rate, but their APD is **Positive (+200)**. This means they are almost always paired up with veterans ranked 200 points higher than them. They are being supported.
+            *   **Player Y** has a similar win rate, but their APD is **Negative (-200)**. This means they are constantly paired with partners ranked 200 points lower than them.
+
+            Without APD, it looks like they are equal. With APD, the group can see that Player Y is a **"Master Carrier"**—they are winning matches while elevating and dragging lower-ranked partners across the finish line.
+
+            **How it works in a Match:**
+            When you step onto the court, the engine calculates the "Gap" between you and your partner:
+            $$\text{Match Delta} = \text{Partner's MMR} - \text{Your MMR}$$
+            
+            *   **Negative APD** = You are the higher-rated player in the duo. You are the **Anchor**.
+            *   **Positive APD** = You are the lower-rated player in the duo. You are **Supported**.
+            """)
+
+        with st.expander("⚔️ What is AOD (Average Opponent Difficulty)?"):
+            st.markdown(r"""
+            **AOD stands for Average Opponent Difficulty.** Think of it as your **"Strength of Schedule"**. 
+            It calculates the average MMR (matchmaking rating) of all the opponents you have stepped on the court against.
+
+            **While your win rate only shows if you won, AOD shows how hard the fight was.**
+
+            **Why does it matter? (The Badminton Example)**
+            *   **Player A** has an 80% win rate, but they mostly play against rookies or lower-ranked players. Their AOD is **Low**.
+            *   **Player B** has a 50% win rate, but they are constantly sharing the court with your group's top-tier, "Mythic"-level players. Their AOD is **High**.
+
+            Without AOD, the leaderboard makes Player A look dominant. With AOD, the group can see that Player B is actually surviving the ultimate gauntlet, making their 50% win rate incredibly impressive.
+
+            **How it works in a Match:**
+            When you enter a 2v2 match, the engine looks at the average MMR of the two players on the opposing side:
+            $$\text{Opponent Team Average MMR} = \frac{\text{Opponent 1 MMR} + \text{Opponent 2 MMR}}{2}$$
+            That number gets added to your running career average. If you constantly face stacked teams, your AOD climbs. If your opponent difficulty is higher than your own ranking, it even triggers the Underdog Bonuses!
+            """)
+
         with st.expander("📉 What are Rust Mechanics (Inactivity Decay)?"):
             st.markdown("""
             **To keep the rankings active and accurate, we use a "Rust" system (Inactivity Decay).**
@@ -475,6 +515,7 @@ if display_lb is not None:
             Your **Archetype** is determined by your career stats and playstyle:
             - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
             - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
+            - **💎 The Supported:** High win rate while consistently paired with higher-rated veterans.
             - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
             - **⚔️ Giant Slayer:** Multiple underdog wins against players 300+ MMR higher than you.
             - **🔥 The Finisher:** Master of momentum with high session win streaks (4+).
@@ -502,7 +543,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.2.4 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.2.7 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -525,4 +566,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.2.4 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.2.7 | Fadu & Friends Community Rankings | Manila 2026")

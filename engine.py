@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.4.2
+    Fadu MMR Engine v1.4.6
     ----------------------
     The deterministic logic core for the Fadu Badminton Power Rankings. 
     Implements Master Specification v4.4:
@@ -63,15 +63,19 @@ class FaduMMREngine:
             
         win_rate = p['wins'] / total
         
-        # 1. THE GENERAL: High Tier leaders who lift partners.
-        if p['mmr'] >= 1800 and apd > 40:
+        # 1. THE GENERAL: High Tier leaders who lift partners (Negative APD).
+        if p['mmr'] >= 1800 and apd < -40:
             return "🎖️ The General"
             
-        # 2. THE CATALYST: High APD (Floor Raisers).
-        if apd > 80:
+        # 2. THE CATALYST: Master Carriers / Floor Raisers (Negative APD).
+        if apd < -80:
             return "🧪 The Catalyst"
             
-        # 3. THE TANK: High AOD (Facing the hardest opponents).
+        # 3. THE SUPPORTED: High Positive APD with high win rate.
+        if apd > 60 and win_rate >= 0.55:
+            return "💎 The Supported"
+            
+        # 4. THE TANK: High AOD (Facing the hardest opponents).
         if aod > 1650:
             return "🛡️ The Tank"
             
