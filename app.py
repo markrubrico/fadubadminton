@@ -137,6 +137,7 @@ if is_admin:
                     engine.simulate(input_area) 
                     report = ai_audit_session(input_area, list(engine.players.keys()))
                     st.session_state.audit_report = report
+                    st.session_state.parse_errors = engine.parse_errors
 
     with c2:
         if st.button("🚀 Calculate & Sync", type="primary", width='stretch'):
@@ -144,19 +145,22 @@ if is_admin:
             else:
                 with st.spinner("Syncing Major Update..."):
                     engine = FaduMMREngine()
-                    df, last_date, drift, decayed = engine.simulate(input_area)
+                    df, last_date, drift, decayed, errors, games_df = engine.simulate(input_area)
                     st.session_state.lb, st.session_state.drift = df, drift
                     st.session_state.date, st.session_state.decayed = last_date, decayed 
+                    st.session_state.parse_errors = errors
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
                         payload_lb = {"target": "Registry", "headers": df.columns.tolist(), "values": df.values.tolist()}
                         log_lines = [[line] for line in input_area.split('\n')]
                         payload_hist = {"target": "Match_History", "headers": ["Raw_Logs"], "values": log_lines}
+                        payload_games = {"target": "Games_Log", "headers": games_df.columns.tolist(), "values": games_df.values.tolist()}
                         
                         try:
                             requests.post(st.secrets["BRIDGE_URL"], json=payload_lb, timeout=20)
                             requests.post(st.secrets["BRIDGE_URL"], json=payload_hist, timeout=20)
+                            requests.post(st.secrets["BRIDGE_URL"], json=payload_games, timeout=20)
                             st.success("🎉 Global Registry & History Updated!")
                             st.cache_data.clear()
                         except:
@@ -165,6 +169,20 @@ if is_admin:
     if 'audit_report' in st.session_state:
         st.info(f"### 📋 Audit Findings\n{st.session_state.audit_report}")
         if st.button("Close Audit"): del st.session_state.audit_report; st.rerun()
+
+    if 'parse_errors' in st.session_state and st.session_state.parse_errors:
+        with st.expander("🚨 Parser Warnings (Skipped Logs)", expanded=True):
+            st.write("Cross-reference the line numbers below with your input to fix formatting.")
+            for err in st.session_state.parse_errors:
+                st.error(f"**Line {err['line']}**: {err['msg']}  \n`{err['raw']}`")
+            
+            st.divider()
+            st.caption("Reference View (Copy/Paste corrected lines from here):")
+            st.code(input_area, line_numbers=True)
+
+            if st.button("🗑️ Clear Warnings"):
+                st.session_state.parse_errors = []
+                st.rerun()
 
 # --- 6. PLAYER HUB ---
 st.divider()
