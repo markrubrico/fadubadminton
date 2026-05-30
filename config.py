@@ -3,9 +3,9 @@
 
 # 1. ELITE SEEDS (Starting MMR: 1500)
 SEEDS = [
-    "Kenmore", "Lance_FBG", "Sam", "Jerome", "Pacs", 
-    "VJ", "Luke_FBG", "Ken", "Ivan", "Efren", 
-    "Jayson", "Allen", "Bombi", "AJ", "Chito", "Marf","Migs"
+    "Kenmore", "Lance_C", "Sam", "Jerome", "Pacs", 
+    "VJ", "Luke", "Ken", "Ivan", "JR", "AJ"
+    "Jayson", "Allen", "Bombi", "AJ", "Chito", "Marf", "Migs", "Chito"
 ]
 
 # 2. MLBB TIER THRESHOLDS
