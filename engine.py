@@ -244,6 +244,7 @@ class FaduMMREngine:
                             "Date": d, 
                             "Match": f"Game {game.get('game_num', '?')}", 
                             "Event": "Victory" if bonus == 0 else "🔥 Underdog Win",
+                            "Score": game.get('score', '-'),
                             "Partner": partner, 
                             "Opponents": opps, 
                             "Result": "W",
@@ -284,6 +285,7 @@ class FaduMMREngine:
                         ledger.append({
                             "Date": d, 
                             "Match": f"Game {game.get('game_num', '?')}", 
+                            "Score": game.get('score', '-'),
                             "Event": "Defeat" if loss == 20 else "🛡️ Shielded Loss",
                             "Partner": partner_name, 
                             "Opponents": opps, 
@@ -428,10 +430,10 @@ class FaduMMREngine:
             
             if p1 in wk and p2 in lk:
                 stats["p1_wins"] += 1
-                stats["matches"].append({"Date": game['date'], "Winner": p1_name, "Loser": p2_name})
+                stats["matches"].append({"Date": game['date'], "Winner": p1_name, "Loser": p2_name, "Score": game.get('score', '-')})
             elif p2 in wk and p1 in lk:
                 stats["p2_wins"] += 1
-                stats["matches"].append({"Date": game['date'], "Winner": p2_name, "Loser": p1_name})
+                stats["matches"].append({"Date": game['date'], "Winner": p2_name, "Loser": p1_name, "Score": game.get('score', '-')})
                 
         return stats
 
@@ -618,6 +620,7 @@ class FaduMMREngine:
                     "Winner": ", ".join(game['W']),
                     "Loser": ", ".join(game['L']),
                     "Score": game.get('score', '')
+                    "Score": game.get('score') or "-"
                 })
 
         decay_report = []

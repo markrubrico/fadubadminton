@@ -442,7 +442,7 @@ if display_lb is not None:
                             st.warning(f"**{rival} Style**\nAOD: {rival_row['AOD'].values[0]}\nAPD: {rival_row['APD'].values[0]}")
                     
                     raw_m_df = pd.DataFrame(h2h["matches"])
-                    st.table(raw_m_df[['Date', 'Winner', 'Loser']])
+                    st.table(raw_m_df[['Date', 'Winner', 'Loser', 'Score']])
 
         st.divider()
         with st.expander("📜 Career Ledger & History", expanded=False):
