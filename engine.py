@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
 import re
@@ -463,10 +464,10 @@ class FaduMMREngine:
             
             # SCORE EXTRACTION: Look for patterns like — 21-19, - 21:19, or : 30-28 at the end
             score = ""
-            score_match = re.search(r'\s*[—\-:]\s*(\d+[\-\:\/]\d+)\s*$', clean_line)
+            score_match = re.search(r'\s*[\u2014\-:]\s*(\d+[\-\:\/]\d+)\s*$', clean_line)
             if score_match:
                 score = score_match.group(1)
-                clean_line = re.sub(r'\s*[—\-:]\s*\d+[\-\:\/]\d+.*$', '', clean_line)
+                clean_line = re.sub(r'\s*[\u2014\-:]\s*\d+[\-\:\/]\d+.*$', '', clean_line)
 
             # IMPROVED PARSING: Order-agnostic and supports multiple delimiters (| or vs)
             if 'W:' in clean_line or 'L:' in clean_line:
@@ -619,7 +620,6 @@ class FaduMMREngine:
                     "Game": game['game_num'],
                     "Winner": ", ".join(game['W']),
                     "Loser": ", ".join(game['L']),
-                    "Score": game.get('score', '')
                     "Score": game.get('score') or "-"
                 })
 

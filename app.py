@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import requests
 import pandas as pd
@@ -361,7 +362,7 @@ if display_lb is not None:
                 if h2h and h2h["matches"]:
                     # --- NEW: BOLD SCOREBOARD ---
                     st.write(f"### {hero} vs {rival}")
-                    st.markdown(f"## {hero} {h2h['p1_wins']} — {h2h['p2_wins']} {rival}")
+                    st.markdown(f"## {hero} {h2h['p1_wins']} \u2014 {h2h['p2_wins']} {rival}")
                     
                     # --- FRONTIER MOMENTUM: STEPPED AREA LOGIC ---
                     matches = h2h["matches"]
