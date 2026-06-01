@@ -666,7 +666,7 @@ class FaduMMREngine:
         all_totals = [p['wins'] + p['losses'] for p in self.players.values() if (p['wins'] + p['losses']) > 0]
         avg_games = np.mean(all_totals) if all_totals else 1
         
-        for p in self.players.values():
+        for k, p in self.players.items():
             total = p['wins'] + p['losses']
             if total == 0:
                 continue
@@ -692,7 +692,7 @@ class FaduMMREngine:
                 "Season Record": f"{p['wins']}-{p['losses']} ", 
                 "Remarks": "", 
                 "w_sort": p['wins'], 
-                "key": p['name'].lower(),
+                "key": k,
                 "Total_Games": total, 
                 "Missed_Sessions": p['missed_sessions'], 
                 "Is_Present": p['active_this_date']
