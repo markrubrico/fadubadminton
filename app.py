@@ -211,9 +211,20 @@ else:
         session_date = "Cloud Sync"
 
 if display_lb is not None:
-    for col in ["Max Streak", "Underdog Wins", "Archetype", "Total_Games"]:
+    # --- ROBUST COLUMN INITIALIZATION ---
+    # Ensures public sheet data matches engine expectations to prevent KeyErrors
+    required_metrics = [
+        "Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", 
+        "Underdog Wins", "+/-", "AOD", "APD", "Status", "Confidence", 
+        "Last Session", "Season Record", "Remarks", "Total_Games", 
+        "Missed_Sessions", "Is_Present"
+    ]
+    for col in required_metrics:
         if col not in display_lb.columns:
-            display_lb[col] = 0 if col != "Archetype" else "Consistent Force"
+            if col == "Archetype": display_lb[col] = "Consistent Force"
+            elif col == "Remarks": display_lb[col] = "Active Competitor"
+            elif col == "Is_Present": display_lb[col] = False
+            else: display_lb[col] = 0
 
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 

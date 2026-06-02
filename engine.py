@@ -613,7 +613,8 @@ class FaduMMREngine:
                     p['max_streak'] = max(p['max_streak'], p['win_streak']) # MAX STREAK TRACKER
                     p['peak'] = max(p['peak'], p['mmr'])
                     p['t_opp'] += (sum(opps) / 2)
-                    p['t_p_delta'] += (self.players[winners[1-i]]['mmr'] - p['mmr'])
+                    if len(winners) == 2:
+                        p['t_p_delta'] += (self.players[winners[1-i]]['mmr'] - p['mmr'])
                     self.wealth_drift += gain
 
                 # Loser Logic
@@ -641,7 +642,8 @@ class FaduMMREngine:
                         l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
                     
                     l['t_opp'] += (sum([self.players[w]['mmr'] for w in winners]) / 2)
-                    l['t_p_delta'] += (partner['mmr'] - l['mmr'])
+                    if len(losers) == 2:
+                        l['t_p_delta'] += (partner['mmr'] - l['mmr'])
                     self.wealth_drift -= loss
 
         decay_report = []
@@ -690,7 +692,7 @@ class FaduMMREngine:
         all_totals = [p['wins'] + p['losses'] for p in self.players.values() if (p['wins'] + p['losses']) > 0]
         avg_games = np.mean(all_totals) if all_totals else 1
         
-        for p in self.players.values():
+        for k, p in self.players.items():
             total = p['wins'] + p['losses']
             if total == 0:
                 continue
@@ -716,7 +718,7 @@ class FaduMMREngine:
                 "Season Record": f"{p['wins']}-{p['losses']} ", 
                 "Remarks": "", 
                 "w_sort": p['wins'], 
-                "key": p['name'].lower(),
+                "key": k,
                 "Total_Games": total, 
                 "Missed_Sessions": p['missed_sessions'], 
                 "Is_Present": p['active_this_date']
