@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.4.3
+    Fadu MMR Engine v1.4.8
     ----------------------
     The deterministic logic core for the Fadu Badminton Power Rankings. 
     Implements Master Specification v4.4:
