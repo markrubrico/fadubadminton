@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import pandas as pd
 import numpy as np
 import re
@@ -6,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.4.8
+    Fadu MMR Engine v1.4.3
     ----------------------
     The deterministic logic core for the Fadu Badminton Power Rankings. 
     Implements Master Specification v4.4:
@@ -32,7 +31,6 @@ class FaduMMREngine:
         self.seeds = [self.clean_name(s).lower() for s in config.SEEDS]
         self.players = {}
         self.wealth_drift = 0
-        self.parse_errors = []
 
     def clean_name(self, name):
         """
@@ -65,19 +63,15 @@ class FaduMMREngine:
             
         win_rate = p['wins'] / total
         
-        # 1. THE GENERAL: High Tier leaders who lift partners (Negative APD).
-        if p['mmr'] >= 1800 and apd < -40:
+        # 1. THE GENERAL: High Tier leaders who lift partners.
+        if p['mmr'] >= 1800 and apd > 40:
             return "🎖️ The General"
             
-        # 2. THE CATALYST: Master Carriers / Floor Raisers (Negative APD).
-        if apd < -80:
+        # 2. THE CATALYST: High APD (Floor Raisers).
+        if apd > 80:
             return "🧪 The Catalyst"
             
-        # 3. THE SUPPORTED: High Positive APD with high win rate.
-        if apd > 60 and win_rate >= 0.55:
-            return "💎 The Supported"
-            
-        # 4. THE TANK: High AOD (Facing the hardest opponents).
+        # 3. THE TANK: High AOD (Facing the hardest opponents).
         if aod > 1650:
             return "🛡️ The Tank"
             
@@ -135,7 +129,7 @@ class FaduMMREngine:
         MASTER AGGREGATION: Calculates top-performing 2v2 partnerships.
         Filter: Min 3 games together.
         """
-        if not raw_logs.strip():
+        if not raw_logs or not str(raw_logs).strip():
             return None
             
         # 1. Run full simulation to establish individual player context (MMR and WR)
@@ -314,7 +308,6 @@ class FaduMMREngine:
                             "Date": d, 
                             "Match": f"Game {game.get('game_num', '?')}", 
                             "Event": "Victory" if bonus == 0 else "🔥 Underdog Win",
-                            "Score": game.get('score', '-'),
                             "Partner": partner, 
                             "Opponents": opps, 
                             "Result": "W",
@@ -355,7 +348,6 @@ class FaduMMREngine:
                         ledger.append({
                             "Date": d, 
                             "Match": f"Game {game.get('game_num', '?')}", 
-                            "Score": game.get('score', '-'),
                             "Event": "Defeat" if loss == 20 else "🛡️ Shielded Loss",
                             "Partner": partner_name, 
                             "Opponents": opps, 
@@ -500,10 +492,10 @@ class FaduMMREngine:
             
             if p1 in wk and p2 in lk:
                 stats["p1_wins"] += 1
-                stats["matches"].append({"Date": game['date'], "Winner": p1_name, "Loser": p2_name, "Score": game.get('score', '-')})
+                stats["matches"].append({"Date": game['date'], "Winner": p1_name, "Loser": p2_name})
             elif p2 in wk and p1 in lk:
                 stats["p2_wins"] += 1
-                stats["matches"].append({"Date": game['date'], "Winner": p2_name, "Loser": p1_name, "Score": game.get('score', '-')})
+                stats["matches"].append({"Date": game['date'], "Winner": p2_name, "Loser": p1_name})
                 
         return stats
 
@@ -514,64 +506,34 @@ class FaduMMREngine:
         logs = []
         current_date = "Unknown"
         
-        # Use raw split to ensure line numbers match the physical text area
-        lines = text.split('\n')
-        for line_num, line in enumerate(lines, 1):
-            clean_line = line.strip()
-            if not clean_line:
+        for line in text.strip().split('\n'):
+            line = line.strip()
+            if not line:
                 continue
                 
             # Date detection (e.g., 11-Apr)
-            date_match = re.match(r'^(\d{1,2}-[A-Za-z]+)', clean_line)
+            date_match = re.match(r'^(\d{1,2}-[A-Za-z]+)', line)
             if date_match:
                 current_date = date_match.group(1)
                 continue
             
             # Game index detection
-            game_idx_match = re.match(r'^Game\s+(\d+):', clean_line)
-            game_idx = int(game_idx_match.group(1)) if game_idx_match else "Unknown"
+            game_idx_match = re.match(r'^Game\s+(\d+):', line)
+            game_idx = int(game_idx_match.group(1)) if game_idx_match else 1
             
-            # SCORE EXTRACTION: Look for patterns like — 21-19, - 21:19, or : 30-28 at the end
-            score = ""
-            score_match = re.search(r'\s*[\u2014\-:]\s*(\d+[\-\:\/]\d+)\s*$', clean_line)
-            if score_match:
-                score = score_match.group(1)
-                clean_line = re.sub(r'\s*[\u2014\-:]\s*\d+[\-\:\/]\d+.*$', '', clean_line)
-
-            # IMPROVED PARSING: Order-agnostic and supports multiple delimiters (| or vs)
-            if 'W:' in clean_line or 'L:' in clean_line:
+            if 'W:' in line and '|' in line:
                 try:
-                    # Normalize delimiters to | for uniform splitting
-                    normalized_line = clean_line.replace(' vs ', ' | ').replace(' vs. ', ' | ')
-                    parts = normalized_line.split('|')
+                    parts = line.split('|')
+                    win_names = parts[0].split('W:')[1].split(',')
+                    lose_names = parts[1].split('L:')[1].split(',')
                     
-                    win_names, lose_names = [], []
-                    for part in parts:
-                        if 'W:' in part:
-                            win_names = [n.strip() for n in part.split('W:')[1].split(',') if n.strip()]
-                        elif 'L:' in part:
-                            lose_names = [n.strip() for n in part.split('L:')[1].split(',') if n.strip()]
-                    
-                    if win_names and lose_names:
-                        logs.append({
-                            'date': current_date, 
-                            'game_num': game_idx, 
-                            'W': win_names,
-                            'L': lose_names,
-                            'score': score
-                        })
-                    else:
-                        self.parse_errors.append({
-                            "line": line_num,
-                            "msg": f"Missing team content (Game {game_idx})",
-                            "raw": clean_line
-                        })
-                except Exception as e:
-                    self.parse_errors.append({
-                        "line": line_num,
-                        "msg": f"Parsing Error: {str(e)}",
-                        "raw": clean_line
+                    logs.append({
+                        'date': current_date, 
+                        'game_num': game_idx, 
+                        'W': [x.strip() for x in win_names], 
+                        'L': [x.strip() for x in lose_names]
                     })
+                except Exception:
                     continue
         return logs
 
@@ -581,15 +543,14 @@ class FaduMMREngine:
         Calculates MMR, decaying, streaks, and Hall of Fame stats.
         """
         if not text.strip():
-            return pd.DataFrame(), "None", 0, [], [], pd.DataFrame()
+            return pd.DataFrame(), "None", 0, []
             
         logs = self._parse_to_list(text)
         if not logs:
-            return pd.DataFrame(), "Unknown", 0, [], self.parse_errors, pd.DataFrame()
+            return pd.DataFrame(), "Unknown", 0, []
             
         dates = list(dict.fromkeys([l['date'] for l in logs]))
         decay_tracker = {}
-        games_history = []
         
         for idx, d in enumerate(dates):
             is_last_date = (idx == len(dates) - 1)
@@ -683,15 +644,6 @@ class FaduMMREngine:
                     l['t_p_delta'] += (partner['mmr'] - l['mmr'])
                     self.wealth_drift -= loss
 
-                # Log structured game for the Google Sheet sync
-                games_history.append({
-                    "Date": game['date'],
-                    "Game": game['game_num'],
-                    "Winner": ", ".join(game['W']),
-                    "Loser": ", ".join(game['L']),
-                    "Score": game.get('score') or "-"
-                })
-
         decay_report = []
         for p_id, total_penalty in decay_tracker.items():
             decay_report.append({
@@ -700,7 +652,7 @@ class FaduMMREngine:
                 "Missed": self.players[p_id]['missed_sessions']
             })
 
-        return self._build_table(elite_thresh), dates[-1], self.wealth_drift, decay_report, self.parse_errors, pd.DataFrame(games_history)
+        return self._build_table(elite_thresh), dates[-1], self.wealth_drift, decay_report
 
     def _init_p(self, name):
         """
@@ -732,13 +684,13 @@ class FaduMMREngine:
 
     def _build_table(self, thresh):
         """
-        Compiles the final Power Ranking DataFrame.
+        Compiles the final Power Ranking DataFrame with Header Locking.
         """
         res = []
         all_totals = [p['wins'] + p['losses'] for p in self.players.values() if (p['wins'] + p['losses']) > 0]
         avg_games = np.mean(all_totals) if all_totals else 1
         
-        for k, p in self.players.items():
+        for p in self.players.values():
             total = p['wins'] + p['losses']
             if total == 0:
                 continue
@@ -764,7 +716,7 @@ class FaduMMREngine:
                 "Season Record": f"{p['wins']}-{p['losses']} ", 
                 "Remarks": "", 
                 "w_sort": p['wins'], 
-                "key": k,
+                "key": p['name'].lower(),
                 "Total_Games": total, 
                 "Missed_Sessions": p['missed_sessions'], 
                 "Is_Present": p['active_this_date']
@@ -777,4 +729,11 @@ class FaduMMREngine:
             player_object = self.players[row['key']]
             df.at[i, "Remarks"] = self._generate_remark(player_object, row['APD'], row['AOD'], row['Rank'])
             
-        return df.drop(columns=['w_sort', 'key'])
+        # FINAL HEADER LOCK: Explicitly define columns to ensure they are sent to Sync
+        final_cols = [
+            "Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", 
+            "Underdog Wins", "+/-", "AOD", "APD", "Status", "Confidence", 
+            "Last Session", "Season Record", "Remarks", "Total_Games", 
+            "Missed_Sessions", "Is_Present"
+        ]
+        return df[final_cols]

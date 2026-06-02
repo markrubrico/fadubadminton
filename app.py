@@ -52,6 +52,15 @@ def fetch_public_data():
     except Exception:
         return None, None
 
+@st.cache_data(ttl=600)
+def get_cached_duos_leaderboard(raw_logs):
+    """Calculates pair stats once and caches the result for tab-switching performance."""
+    if not raw_logs or not str(raw_logs).strip():
+        return None
+    
+    engine = FaduMMREngine()
+    return engine.get_pairs_leaderboard(raw_logs)
+
 # --- 3. SIDEBAR STATUS & ACCESS CONTROL ---
 with st.sidebar:
     st.title("🏸 Fadu Ops")
@@ -275,12 +284,20 @@ if display_lb is not None:
         final_cols = [c for c in original_13 if c in df_disp.columns]
         st.dataframe(df_disp[final_cols], width='stretch', hide_index=True)
 
+        st.divider()
+        st.subheader("👥 THE DYNAMIC DUOS LEADERBOARD")
+        with st.spinner("Analyzing Team Synergy..."):
+            duos_df = get_cached_duos_leaderboard(display_logs)
+            if duos_df is not None:
+                st.dataframe(duos_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
+
     # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
         st.subheader("👥 THE DYNAMIC DUOS LEADERBOARD")
         with st.spinner("Analyzing Team Synergy..."):
-            engine_duo = FaduMMREngine()
-            duos_df = engine_duo.get_pairs_leaderboard(display_logs)
+            duos_df = get_cached_duos_leaderboard(display_logs)
             if duos_df is not None:
                 st.dataframe(duos_df, use_container_width=True, hide_index=True)
             else:
@@ -470,7 +487,47 @@ if display_lb is not None:
                 # Descending view for display (Latest games at the top)
                 hist_final = hist_disp.iloc[::-1]
                 
-                st.line_chart(hist_final.reset_index(drop=True)['Balance'], use_container_width=True)
+                # --- Plotly Progression Chart with Tier Thresholds ---
+                chart_data = hist_disp.reset_index(drop=True)
+                fig_hist = go.Figure()
+                
+                # Main MMR Progress Line
+                fig_hist.add_trace(go.Scatter(
+                    x=chart_data.index + 1,
+                    y=chart_data['Balance'],
+                    mode='lines+markers',
+                    name='MMR',
+                    line=dict(color='#00ff88', width=3),
+                    marker=dict(size=6, color='#00ff88'),
+                    hovertemplate='<b>Game %{x}</b><br>MMR: %{y}<br>Result: %{customdata}<extra></extra>',
+                    customdata=chart_data['Result']
+                ))
+                
+                # Add Horizontal Tier Thresholds
+                for tier_name, threshold in config.TIER_THRESHOLDS:
+                    if threshold > 0:
+                        fig_hist.add_hline(
+                            y=threshold, 
+                            line_dash="dash", 
+                            line_color="rgba(255, 255, 255, 0.2)",
+                            annotation_text=f" {tier_name}",
+                            annotation_position="top left",
+                            annotation_font_size=10,
+                            annotation_font_color="rgba(255, 255, 255, 0.4)"
+                        )
+
+                fig_hist.update_layout(
+                    template='plotly_dark',
+                    height=400,
+                    margin=dict(l=20, r=20, t=40, b=20),
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    xaxis=dict(title="Matches Played (Chronological)", showgrid=False),
+                    yaxis=dict(title="MMR Rating", showgrid=True, gridcolor='rgba(255,255,255,0.05)'),
+                    hovermode='x unified'
+                )
+                
+                st.plotly_chart(fig_hist, use_container_width=True)
                 st.dataframe(hist_final, use_container_width=True, hide_index=True)
 
     # --- TAB 3: FAQ & PHILOSOPHY ---
