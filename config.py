@@ -1,4 +1,4 @@
-# v1.0.0 - Fadu League Control Room
+# v1.0.1 - Fadu League Control Room
 # ==========================================
 
 # 1. ELITE SEEDS (Starting MMR: 1500)

@@ -12,9 +12,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.2.8 - Scoreboard & Robust Parser Update
+# Milestone: v6.2.9 - Scoreboard & Robust Parser Update
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.2.8",
+    page_title="Fadu & Friends Portal v6.2.9",
     page_icon="🏸",
     layout="wide"
 )
@@ -106,7 +106,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.2.8 | Frontier Momentum")
+    st.caption("v6.2.9 | Frontier Momentum")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -277,6 +277,16 @@ if display_lb is not None:
 
     # --- TAB 2: COMBAT & SYNERGY ---
     with tab2:
+        st.subheader("👥 THE DYNAMIC DUOS LEADERBOARD")
+        with st.spinner("Analyzing Team Synergy..."):
+            engine_duo = FaduMMREngine()
+            duos_df = engine_duo.get_pairs_leaderboard(display_logs)
+            if duos_df is not None:
+                st.dataframe(duos_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
+        st.divider()
+
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
         
         # --- DEEP LINKING LOGIC ---
@@ -565,7 +575,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.2.8 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.2.9 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -588,4 +598,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.2.8 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.2.9 | Fadu & Friends Community Rankings | Manila 2026")

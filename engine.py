@@ -6,7 +6,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.4.7
+    Fadu MMR Engine v1.4.8
     ----------------------
     The deterministic logic core for the Fadu Badminton Power Rankings. 
     Implements Master Specification v4.4:
@@ -129,6 +129,75 @@ class FaduMMREngine:
             return "Iron Man. Battling heavyweights."
             
         return "Pure Hustle. Consistent force."
+
+    def get_pairs_leaderboard(self, raw_logs):
+        """
+        MASTER AGGREGATION: Calculates top-performing 2v2 partnerships.
+        Filter: Min 3 games together.
+        """
+        if not raw_logs.strip():
+            return None
+            
+        # 1. Run full simulation to establish individual player context (MMR and WR)
+        self.simulate(raw_logs)
+        
+        # 2. Extract pair statistics
+        logs = self._parse_to_list(raw_logs)
+        pair_data = {} # Tuple(id, id) -> {'W': 0, 'L': 0}
+        
+        for game in logs:
+            for side in ['W', 'L']:
+                # Standardize and sort to prevent "A+B" != "B+A"
+                team_ids = sorted([self.clean_name(p).lower() for p in game[side]])
+                if len(team_ids) == 2:
+                    p_key = tuple(team_ids)
+                    pair_data.setdefault(p_key, {'W': 0, 'L': 0})
+                    pair_data[p_key][side] += 1
+        
+        results = []
+        for (p1_id, p2_id), stats in pair_data.items():
+            total = stats['W'] + stats['L']
+            if total < 3: # Integrity filter
+                continue
+                
+            p1 = self.players.get(p1_id)
+            p2 = self.players.get(p2_id)
+            if not p1 or not p2:
+                continue
+            
+            # Individual metrics for synergy calculation
+            p1_wr = p1['wins'] / (p1['wins'] + p1['losses']) if (p1['wins'] + p1['losses']) > 0 else 0
+            p2_wr = p2['wins'] / (p2['wins'] + p2['losses']) if (p2['wins'] + p2['losses']) > 0 else 0
+            avg_indiv_wr = (p1_wr + p2_wr) / 2
+            
+            pair_wr = stats['W'] / total
+            syn_delta = pair_wr - avg_indiv_wr
+            combined_mmr = (p1['mmr'] + p2['mmr']) / 2
+            
+            # Archetype Mapping
+            if syn_delta > 0.10: arch = "💖 The Power Couple"
+            elif combined_mmr >= 2300: arch = "🗼 Twin Towers"
+            elif pair_wr >= 0.70: arch = "🚀 The Unstoppables"
+            elif syn_delta < -0.10: arch = "🚫 Oil and Water"
+            else: arch = "⚖️ Balanced Duo"
+            
+            results.append({
+                "Pair / Duo": f"{p1['name']} + {p2['name']}",
+                "Combined MMR": int(round(combined_mmr)),
+                "Win %": f"{pair_wr:.1%}",
+                "Synergy Delta": f"{syn_delta:+.1%}",
+                "Archetype": arch,
+                "mmr_sort": combined_mmr,
+                "wr_sort": pair_wr
+            })
+            
+        if not results:
+            return None
+            
+        # Sort by Combined MMR then Win Rate
+        df = pd.DataFrame(results).sort_values(by=["mmr_sort", "wr_sort"], ascending=False)
+        df.insert(0, "Rank", range(1, len(df) + 1))
+        return df.drop(columns=["mmr_sort", "wr_sort"])
 
     def get_player_history(self, text, target_player):
         """
