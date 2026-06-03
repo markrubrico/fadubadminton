@@ -554,6 +554,7 @@ class FaduMMREngine:
             
         dates = list(dict.fromkeys([l['date'] for l in logs]))
         decay_tracker = {}
+        lookback_idx = max(0, len(dates) - 5)
         
         for idx, d in enumerate(dates):
             is_last_date = (idx == len(dates) - 1)
@@ -563,6 +564,11 @@ class FaduMMREngine:
             # Identify active players for rust check
             for g in session_games:
                 players_today.update([self.clean_name(n).lower() for n in g['W'] + g['L']])
+            
+            # Capture Trend Snapshot (MMR as of 5 sessions ago)
+            if idx == lookback_idx:
+                for p in self.players.values():
+                    p['trend_mmr'] = p['mmr']
             
             # --- RUST & PRESENCE CHECK ---
             for p_id, p in self.players.items():
@@ -682,7 +688,9 @@ class FaduMMREngine:
                 'underdog_wins': 0, 
                 'total_games_before_session': 0, 
                 'is_new_debut': False, 
-                'missed_sessions': 0
+                'missed_sessions': 0,
+                'initial_mmr': start_mmr,
+                'trend_mmr': start_mmr
             }
         return n
 
@@ -723,7 +731,9 @@ class FaduMMREngine:
                 "key": p_id,
                 "Total_Games": total, 
                 "Missed_Sessions": p['missed_sessions'], 
-                "Is_Present": p['active_this_date']
+                "Is_Present": p['active_this_date'],
+                "Initial MMR": int(round(p['initial_mmr'])),
+                "Trend": int(round(p['mmr'] - p.get('trend_mmr', p['initial_mmr'])))
             })
             
         df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
@@ -738,6 +748,6 @@ class FaduMMREngine:
             "Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", 
             "Underdog Wins", "+/-", "AOD", "APD", "Status", "Confidence", 
             "Last Session", "Season Record", "Remarks", "Total_Games", 
-            "Missed_Sessions", "Is_Present"
+            "Missed_Sessions", "Is_Present", "Initial MMR", "Trend"
         ]
         return df[final_cols]

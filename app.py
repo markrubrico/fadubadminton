@@ -217,7 +217,7 @@ if display_lb is not None:
         "Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", 
         "Underdog Wins", "+/-", "AOD", "APD", "Status", "Confidence", 
         "Last Session", "Season Record", "Remarks", "Total_Games", 
-        "Missed_Sessions", "Is_Present"
+        "Missed_Sessions", "Is_Present", "Trend"
     ]
     for col in required_metrics:
         if col not in display_lb.columns:
@@ -273,9 +273,9 @@ if display_lb is not None:
             h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G", 
                          help="The player with the highest total game volume this season. Pure dedication.")
 
-        improved_row = display_lb.loc[(display_lb['MMR'] - display_lb['Peak'].min()).idxmax()]
-        h_col3.metric("📈 Most Improved", improved_row['Player'], f"{int(improved_row['MMR'])} MMR", 
-                     help="The largest climb from a player's starting floor to their current standing.")
+        improved_row = display_lb.loc[display_lb['Trend'].idxmax()]
+        h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(improved_row['Trend'])} MMR",
+                     help="The largest MMR gain over the last 5 weeks (approx. 1 month). This rewards recent performance rather than starting point.")
 
         if 'Underdog Wins' in display_lb.columns:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
