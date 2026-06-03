@@ -35,7 +35,7 @@ def fetch_public_data():
         lb_df['Player'] = lb_df['Player'].astype(str)
         
         # Convert numeric columns safely, coercing errors (like date strings) to NaN
-        for col in ["APD", "AOD", "MMR", "Peak", "+/-", "Total_Games", "Underdog Wins"]:
+        for col in ["APD", "AOD", "MMR", "Peak", "+/-", "Total_Games", "Underdog Wins", "Trend", "Initial MMR"]:
             if col in lb_df.columns:
                 lb_df[col] = pd.to_numeric(lb_df[col], errors='coerce').fillna(0)
         
@@ -273,9 +273,14 @@ if display_lb is not None:
             h_col2.metric("🦾 Iron Man", ironman_row['Player'], f"{int(ironman_row['Total_Games'])} G", 
                          help="The player with the highest total game volume this season. Pure dedication.")
 
-        improved_row = display_lb.loc[display_lb['Trend'].idxmax()]
-        h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(improved_row['Trend'])} MMR",
-                     help="The largest MMR gain over the last 5 weeks (approx. 1 month). This rewards recent performance rather than starting point.")
+        # Find player with highest trend, ensuring they have at least 1 MMR gain to avoid tie-defaults
+        potential_improved = display_lb[display_lb['Trend'] > 0]
+        if not potential_improved.empty:
+            improved_row = potential_improved.loc[potential_improved['Trend'].idxmax()]
+            h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(improved_row['Trend'])} MMR",
+                         help="The largest MMR gain over the last 5 weeks (approx. 1 month). This rewards recent performance rather than starting point.")
+        else:
+            h_col3.metric("📈 Most Improved", "N/A", "0 MMR", help="No significant climb detected in the last 5 weeks.")
 
         if 'Underdog Wins' in display_lb.columns:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
