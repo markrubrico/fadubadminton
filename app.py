@@ -297,10 +297,20 @@ if display_lb is not None:
 
         st.divider()
         st.subheader("👥 THE DYNAMIC DUOS LEADERBOARD")
+        
+        duo_config = {
+            "Rank": st.column_config.NumberColumn("Rank", help="Team standing based on Combined MMR."),
+            "Pair / Duo": st.column_config.TextColumn("Pair / Duo", help="The two players in this partnership."),
+            "Combined MMR": st.column_config.NumberColumn("Combined MMR", help="The average skill rating (Power Level) of the duo. Used for primary ranking."),
+            "Win %": st.column_config.TextColumn("Win %", help="Actual win rate of this specific duo over at least 3 games."),
+            "Synergy Delta": st.column_config.TextColumn("Synergy Delta", help="Performance vs. Expectation. (+) means you play better together than apart. (-) means styles may clash."),
+            "Archetype": st.column_config.TextColumn("Archetype", help="Classification based on team strength and chemistry.")
+        }
+
         with st.spinner("Analyzing Team Synergy..."):
             duos_df = get_cached_duos_leaderboard(display_logs)
             if duos_df is not None:
-                st.dataframe(duos_df, use_container_width=True, hide_index=True)
+                st.dataframe(duos_df, use_container_width=True, hide_index=True, column_config=duo_config)
             else:
                 st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
 
@@ -310,7 +320,7 @@ if display_lb is not None:
         with st.spinner("Analyzing Team Synergy..."):
             duos_df = get_cached_duos_leaderboard(display_logs)
             if duos_df is not None:
-                st.dataframe(duos_df, use_container_width=True, hide_index=True)
+                st.dataframe(duos_df, use_container_width=True, hide_index=True, column_config=duo_config)
             else:
                 st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
         st.divider()
@@ -596,7 +606,7 @@ if display_lb is not None:
             That number gets added to your running career average. If you constantly face stacked teams, your AOD climbs. If your opponent difficulty is higher than your own ranking, it even triggers the Underdog Bonuses!
             """)
 
-        with st.expander("📉 What are Rust Mechanics (Inactivity Decay)?"):
+        with st.expander("� What are Rust Mechanics (Inactivity Decay)?"):
             st.markdown("""
             **To keep the rankings active and accurate, we use a "Rust" system (Inactivity Decay).**
             
@@ -623,6 +633,25 @@ if display_lb is not None:
             - **🎯 The Specialist:** High efficiency winner with a 58%+ win rate.
             - **🐣 New Challenger:** Players still in the Rookie calibration phase.
             - **🏸 Consistent Force:** The reliable backbone of the community.
+            """)
+
+        with st.expander("👯 How does the Dynamic Duos Leaderboard work?"):
+            st.markdown(r"""
+            **The Duos Leaderboard tracks the performance of specific 2v2 partnerships.**
+            
+            *   **The Entry Requirement:** A pair must play at least **3 games together** to appear on the leaderboard.
+            *   **Combined MMR:** This is the average skill rating of the partnership. It represents the collective "Power Level" of a team. 
+                $$\text{Combined MMR} = \frac{\text{Player 1 MMR} + \text{Player 2 MMR}}{2}$$
+                The leaderboard is primarily sorted by this metric to identify the league's top-tier teams.
+            *   **Synergy Delta:** This is the most important metric. It compares the pair's actual win rate against the average win rate of the two individuals when they play with other people.
+                *   **Positive Delta (+):** You play better together than you do apart.
+                *   **Negative Delta (-):** Your styles might be clashing.
+            *   **Duo Archetypes:**
+                *   💖 **The Power Couple:** Synergy Delta > 10%. A match made in heaven.
+                *   🚀 **The Unstoppables:** Win rate of 70% or higher.
+                *   🗼 **Twin Towers:** Both players are high-tier (Combined MMR 2300+).
+                *   🚫 **Oil and Water:** Synergy Delta < -10%. Great players, but a tough fit together.
+                *   ⚖️ **Balanced Duo:** Consistent performance relative to individual skill.
             """)
 
         with st.expander("⚔️ How does the Underdog (Giant Slayer) Bonus work?"):
