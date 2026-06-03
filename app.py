@@ -35,7 +35,7 @@ def fetch_public_data():
         lb_df['Player'] = lb_df['Player'].astype(str)
         
         # Convert numeric columns safely, coercing errors (like date strings) to NaN
-        for col in ["APD", "AOD", "MMR", "Peak", "+/-", "Total_Games", "Underdog Wins", "Trend", "Initial MMR"]:
+        for col in ["APD", "AOD", "MMR", "Peak", "+/-", "Total_Games", "Underdog Wins", "Trend", "Initial MMR", "Rookie_Trend"]:
             if col in lb_df.columns:
                 lb_df[col] = pd.to_numeric(lb_df[col], errors='coerce').fillna(0)
         
@@ -217,7 +217,7 @@ if display_lb is not None:
         "Rank", "Player", "Archetype", "Tier", "MMR", "Peak", "Max Streak", 
         "Underdog Wins", "+/-", "AOD", "APD", "Status", "Confidence", 
         "Last Session", "Season Record", "Remarks", "Total_Games", 
-        "Missed_Sessions", "Is_Present", "Trend"
+        "Missed_Sessions", "Is_Present", "Initial MMR", "Trend", "Rookie_Trend"
     ]
     for col in required_metrics:
         if col not in display_lb.columns:
@@ -261,8 +261,8 @@ if display_lb is not None:
         st.divider()
 
         st.markdown("###### 👑 Season Leaders (All-Time)")
-        h_col1, h_col2 = st.columns(2)
-        h_col3, h_col4 = st.columns(2)
+        h_col1, h_col2, h_col3 = st.columns(3)
+        h_col4, h_col5, h_col6 = st.columns(3)
 
         leader = display_lb.iloc[0]
         h_col1.metric("🏆 League Leader", leader['Player'], f"Rank #1 ({leader['Tier']})", 
@@ -275,7 +275,8 @@ if display_lb is not None:
 
         # Find player with highest trend, ensuring they have at least 1 MMR gain to avoid tie-defaults
         potential_improved = display_lb[display_lb['Trend'] > 0]
-        if not potential_improved.empty:
+        if not potential_improved.empty and len(re.findall(r'^(\d{1,2}-[A-Za-z]+)', display_logs, re.M)) > 1:
+            # Tie-break: if trends are equal, the higher ranked player (MMR) wins the highlight
             improved_row = potential_improved.sort_values(by=["Trend", "MMR"], ascending=False).iloc[0]
             h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(improved_row['Trend'])} MMR",
                          help="The largest MMR gain over the last 5 weeks (approx. 1 month). This rewards recent performance rather than starting point.")
@@ -286,6 +287,18 @@ if display_lb is not None:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
             h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays", 
                          help="The master of upsets. Most wins against opponents rated 300+ points higher.")
+
+        potential_rookies = display_lb[display_lb['Rookie_Trend'] > 0]
+        if not potential_rookies.empty:
+            rookie_row = potential_rookies.sort_values(by=["Rookie_Trend", "MMR"], ascending=False).iloc[0]
+            h_col5.metric("🐣 Rookie of the Month", f"{rookie_row['Player']} ✨", f"+{int(rookie_row['Rookie_Trend'])} MMR",
+                         help="The best performing player among those who debuted within the last 5 weeks.")
+        else:
+            h_col5.metric("🐣 Rookie of the Month", "N/A", "0 MMR", help="No new debuts with positive growth detected.")
+
+        h_col6.metric("📉 Session Intensity", f"{int(present_df['MMR'].mean()) if not present_df.empty else 0}", "Avg MMR", 
+                     help="The current skill ceiling of the latest session.")
+
 
         st.divider()
         search = st.text_input("🔍 Search Player:", placeholder="Filter by name...", key="p_search")
