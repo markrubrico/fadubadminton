@@ -31,6 +31,7 @@ class FaduMMREngine:
         self.seeds = [self.clean_name(s).lower() for s in config.SEEDS]
         self.players = {}
         self.wealth_drift = 0
+        self.parse_errors = []
 
     def clean_name(self, name):
         """
@@ -505,8 +506,9 @@ class FaduMMREngine:
         """
         logs = []
         current_date = "Unknown"
-        
-        for line in text.strip().split('\n'):
+        self.parse_errors = []
+
+        for i, line in enumerate(text.strip().split('\n'), 1):
             line = line.strip()
             if not line:
                 continue
@@ -534,6 +536,7 @@ class FaduMMREngine:
                         'L': [x.strip() for x in lose_names]
                     })
                 except Exception:
+                    self.parse_errors.append({"line": i, "msg": "Malformed Log Line", "raw": line})
                     continue
         return logs
 
@@ -543,11 +546,11 @@ class FaduMMREngine:
         Calculates MMR, decaying, streaks, and Hall of Fame stats.
         """
         if not text.strip():
-            return pd.DataFrame(), "None", 0, []
+            return pd.DataFrame(), "None", 0, [], [], pd.DataFrame()
             
         logs = self._parse_to_list(text)
         if not logs:
-            return pd.DataFrame(), "Unknown", 0, []
+            return pd.DataFrame(), "Unknown", 0, [], [], pd.DataFrame()
             
         dates = list(dict.fromkeys([l['date'] for l in logs]))
         decay_tracker = {}
@@ -652,7 +655,8 @@ class FaduMMREngine:
                 "Missed": self.players[p_id]['missed_sessions']
             })
 
-        return self._build_table(elite_thresh), dates[-1], self.wealth_drift, decay_report
+        games_df = pd.DataFrame(logs)
+        return self._build_table(elite_thresh), dates[-1], self.wealth_drift, decay_report, self.parse_errors, games_df
 
     def _init_p(self, name):
         """
@@ -690,7 +694,7 @@ class FaduMMREngine:
         all_totals = [p['wins'] + p['losses'] for p in self.players.values() if (p['wins'] + p['losses']) > 0]
         avg_games = np.mean(all_totals) if all_totals else 1
         
-        for p in self.players.values():
+        for p_id, p in self.players.items():
             total = p['wins'] + p['losses']
             if total == 0:
                 continue
@@ -716,7 +720,7 @@ class FaduMMREngine:
                 "Season Record": f"{p['wins']}-{p['losses']} ", 
                 "Remarks": "", 
                 "w_sort": p['wins'], 
-                "key": p['name'].lower(),
+                "key": p_id,
                 "Total_Games": total, 
                 "Missed_Sessions": p['missed_sessions'], 
                 "Is_Present": p['active_this_date']
