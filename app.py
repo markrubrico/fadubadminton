@@ -276,7 +276,7 @@ if display_lb is not None:
         # Find player with highest trend, ensuring they have at least 1 MMR gain to avoid tie-defaults
         potential_improved = display_lb[display_lb['Trend'] > 0]
         if not potential_improved.empty:
-            improved_row = potential_improved.loc[potential_improved['Trend'].idxmax()]
+            improved_row = potential_improved.sort_values(by=["Trend", "MMR"], ascending=False).iloc[0]
             h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(improved_row['Trend'])} MMR",
                          help="The largest MMR gain over the last 5 weeks (approx. 1 month). This rewards recent performance rather than starting point.")
         else:

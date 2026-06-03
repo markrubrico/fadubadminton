@@ -566,9 +566,11 @@ class FaduMMREngine:
                 players_today.update([self.clean_name(n).lower() for n in g['W'] + g['L']])
             
             # Capture Trend Snapshot (MMR as of 5 sessions ago)
-            if idx == lookback_idx:
-                for p in self.players.values():
-                    p['trend_mmr'] = p['mmr']
+            # Improvement: Ensure every player active at or after the lookback has a snapshot
+            if idx >= lookback_idx:
+                for p_id, p in self.players.items():
+                    if 'trend_mmr' not in p:
+                        p['trend_mmr'] = p['mmr']
             
             # --- RUST & PRESENCE CHECK ---
             for p_id, p in self.players.items():
@@ -690,7 +692,6 @@ class FaduMMREngine:
                 'is_new_debut': False, 
                 'missed_sessions': 0,
                 'initial_mmr': start_mmr,
-                'trend_mmr': start_mmr
             }
         return n
 
@@ -733,7 +734,7 @@ class FaduMMREngine:
                 "Missed_Sessions": p['missed_sessions'], 
                 "Is_Present": p['active_this_date'],
                 "Initial MMR": int(round(p['initial_mmr'])),
-                "Trend": int(round(p['mmr'] - p.get('trend_mmr', p['initial_mmr'])))
+                "Trend": int(round(p['mmr'] - p['trend_mmr'])) if 'trend_mmr' in p else 0
             })
             
         df = pd.DataFrame(res).sort_values(by=["MMR", "w_sort"], ascending=False)
