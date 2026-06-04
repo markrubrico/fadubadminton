@@ -275,14 +275,17 @@ if display_lb is not None:
 
         # Find player with highest trend, ensuring they have at least 1 MMR gain to avoid tie-defaults
         potential_improved = display_lb[display_lb['Trend'] > 0]
-        if not potential_improved.empty and len(re.findall(r'^(\d{1,2}-[A-Za-z]+)', display_logs, re.M)) > 1:
+        # Ensure display_logs is treated as a string and handle flexible date detection
+        log_text = str(display_logs) if display_logs else ""
+        session_count = len(re.findall(r'^(\d{1,2}-[A-Za-z]+)', log_text, re.MULTILINE))
+
+        if not potential_improved.empty and session_count > 1:
             # Tie-break: if trends are equal, the higher ranked player (MMR) wins the highlight
             improved_row = potential_improved.sort_values(by=["Trend", "MMR"], ascending=False).iloc[0]
-            h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(improved_row['Trend'])} MMR",
+            h_col3.metric("📈 Most Improved", f"{improved_row['Player']} 🚀", f"+{int(round(improved_row['Trend']))} MMR",
                          help="The largest MMR gain over the last 5 weeks (approx. 1 month). This rewards recent performance rather than starting point.")
         else:
             h_col3.metric("📈 Most Improved", "N/A", "0 MMR", help="No significant climb detected in the last 5 weeks.")
-
         if 'Underdog Wins' in display_lb.columns:
             slayer_row = display_lb.loc[display_lb['Underdog Wins'].idxmax()]
             h_col4.metric("⚔️ Giant Slayer", slayer_row['Player'], f"{int(slayer_row['Underdog Wins'])} Slays", 
