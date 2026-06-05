@@ -512,14 +512,9 @@ if display_lb is not None:
                             st.warning(f"**{rival} Style**\nAOD: {rival_row['AOD'].values[0]}\nAPD: {rival_row['APD'].values[0]}")
                     
                     raw_m_df = pd.DataFrame(h2h["matches"])
-        
                     # Safely display available columns
                     display_cols = [c for c in ['Date', 'Winner', 'Loser', 'Score'] if c in raw_m_df.columns]
                     st.table(raw_m_df[display_cols])
-
-        st.divider()
-        with st.expander("📜 Career Ledger & History", expanded=False):
-
 
         st.divider()
         with st.expander("📜 Career Ledger & History", expanded=False):
