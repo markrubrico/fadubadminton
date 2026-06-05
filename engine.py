@@ -5,7 +5,7 @@ import config
 
 class FaduMMREngine:
     """
-    Fadu MMR Engine v1.4.8
+    Fadu MMR Engine v1.4.9
     ----------------------
     The deterministic logic core for the Fadu Badminton Power Rankings. 
     Implements Master Specification v4.4:
@@ -286,6 +286,8 @@ class FaduMMREngine:
                     
                     bonus = 0
                     opp_max = max([replay_players[l]['mmr'] for l in losers])
+                    opp_mmrs = [replay_players[l]['mmr'] for l in losers]
+                    opp_max = max(opp_mmrs) if opp_mmrs else p['mmr']
                     gap = opp_max - p['mmr']
                     
                     # Underdog check (v1.4.2: Tier Ceiling Removed)
@@ -536,14 +538,17 @@ class FaduMMREngine:
             if 'W:' in line and '|' in line:
                 try:
                     parts = line.split('|')
-                    win_names = parts[0].split('W:')[1].split(',')
-                    lose_names = parts[1].split('L:')[1].split(',')
+                    # Extract names and strip any trailing scores (e.g., "Shane — 31-26" -> "Shane")
+                    win_names_raw = parts[0].split('W:')[1].split(',')
+                    lose_names_raw = parts[1].split('L:')[1].split(',')
+                    
+                    clean_names = lambda names: [re.split(r'\s*[—\-]\s*\d+', n)[0].strip() for n in names]
                     
                     logs.append({
                         'date': current_date, 
                         'game_num': game_idx, 
-                        'W': [x.strip() for x in win_names], 
-                        'L': [x.strip() for x in lose_names]
+                        'W': clean_names(win_names_raw), 
+                        'L': clean_names(lose_names_raw)
                     })
                 except Exception:
                     self.parse_errors.append({"line": i, "msg": "Malformed Log Line", "raw": line})
@@ -635,20 +640,27 @@ class FaduMMREngine:
                     p['win_streak'] += 1
                     p['max_streak'] = max(p['max_streak'], p['win_streak']) # MAX STREAK TRACKER
                     p['peak'] = max(p['peak'], p['mmr'])
-                    p['t_opp'] += (sum(opps) / 2)
+                    # Safe AOD/APD calculation for 1v1 support
+                    p['t_opp'] += (sum(opps) / len(opps)) if opps else p['mmr']
                     
                     # Safe APD calculation (0 if 1v1)
                     partner_ids = [wx for idx, wx in enumerate(winners) if idx != i]
                     if partner_ids:
                         p['t_p_delta'] += (self.players[partner_ids[0]]['mmr'] - p['mmr'])
+                    partners = [wx for idx, wx in enumerate(winners) if idx != i]
+                    if partners:
+                        p['t_p_delta'] += (self.players[partners[0]]['mmr'] - p['mmr'])
                         
                     self.wealth_drift += gain
 
                 # Loser Logic
                 for i, name in enumerate(losers):
                     l = self.players[name]
-                    partner = self.players[losers[1-i]]
-                    
+
+                    # Safe partner identification for 1v1
+                    partner_ids = [lx for idx, lx in enumerate(losers) if idx != i]
+                    partner = self.players[partner_ids[0]] if partner_ids else l
+
                     if not l['active_this_date']:
                         l['mmr_start_of_day'] = l['mmr']
                         l['active_this_date'] = True
@@ -672,7 +684,8 @@ class FaduMMREngine:
                     if l['peak'] >= config.LEGACY_FLOOR_PEAK:
                         l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
                     
-                    l['t_opp'] += (sum([self.players[w]['mmr'] for w in winners]) / 2)
+                    win_mmrs = [self.players[w]['mmr'] for w in winners]
+                    l['t_opp'] += (sum(win_mmrs) / len(win_mmrs)) if win_mmrs else l['mmr']
                     
                     # Safe APD calculation
                     if partner_ids:

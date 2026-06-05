@@ -12,9 +12,9 @@ from engine import FaduMMREngine
 from auditor import ai_audit_session
 
 # --- 1. DASHBOARD CONFIGURATION ---
-# Milestone: v6.2.9 - Scoreboard & Robust Parser Update
+# Milestone: v6.3.0 - Scoreboard & Robust Parser Update
 st.set_page_config(
-    page_title="Fadu & Friends Portal v6.2.9",
+    page_title="Fadu & Friends Portal v6.3.0",
     page_icon="🏸",
     layout="wide"
 )
@@ -115,7 +115,7 @@ with st.sidebar:
         st.write(f"**{seed_string}**")
     
     st.divider()
-    st.caption("v6.2.9 | Frontier Momentum")
+    st.caption("v6.3.0 | Frontier Momentum")
     st.info("📍 Manila, PH")
 
 # --- 4. MOBILE NUDGE & DATA LOADING ---
@@ -695,7 +695,7 @@ if display_lb is not None:
             ]))
         
         st.divider()
-        st.info("💡 **Note:** v6.2.9 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
+        st.info("💡 **Note:** v6.3.0 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
@@ -718,4 +718,4 @@ if is_admin:
         st.caption(f"Session Wealth Drift: {st.session_state.drift} MMR")
 
 st.divider()
-st.caption("v6.2.9 | Fadu & Friends Community Rankings | Manila 2026")
+st.caption("v6.3.0 | Fadu & Friends Community Rankings | Manila 2026")
