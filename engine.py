@@ -302,7 +302,10 @@ class FaduMMREngine:
                     if name == target_id:
                         new_tier = self.get_tier(p['mmr'])
                         change_log = f"🔼 Promoted to {new_tier}" if old_tier != new_tier else "-"
-                        partner = [n for n in game['W'] if self.clean_name(n).lower() != target_id][0]
+                        
+                        # Safely extract partner name for the ledger
+                        partners = [n for n in game['W'] if self.clean_name(n).lower() != target_id]
+                        partner = partners[0] if partners else "Solo/1v1"
                         opps = " / ".join(game['L'])
                         
                         ledger.append({
@@ -324,7 +327,11 @@ class FaduMMREngine:
                     old_mmr = l['mmr']
                     old_tier = self.get_tier(old_mmr)
                     
-                    partner_obj = replay_players[losers[1-i]]
+                    # Safely identify partner for loss protection logic
+                    partner_ids = [lx for idx, lx in enumerate(losers) if idx != i]
+                    partner_id = partner_ids[0] if partner_ids else None
+                    partner_obj = replay_players[partner_id] if partner_id else l
+                    
                     loss = 10 if (l['wins'] + l['losses']) < config.ROOKIE_SHIELD_GAMES else 20
                     
                     is_elite = l['mmr'] >= elite_thresh or partner_obj['mmr'] >= elite_thresh
@@ -343,7 +350,10 @@ class FaduMMREngine:
                     if name == target_id:
                         new_tier = self.get_tier(l['mmr'])
                         change_log = f"🔽 Demoted to {new_tier}" if old_tier != new_tier else "-"
-                        partner_name = [n for n in game['L'] if self.clean_name(n).lower() != target_id][0]
+                        
+                        # Safely extract partner name for the ledger
+                        partners = [n for n in game['L'] if self.clean_name(n).lower() != target_id]
+                        partner_name = partners[0] if partners else "Solo/1v1"
                         opps = " / ".join(game['W'])
                         
                         ledger.append({
@@ -626,7 +636,12 @@ class FaduMMREngine:
                     p['max_streak'] = max(p['max_streak'], p['win_streak']) # MAX STREAK TRACKER
                     p['peak'] = max(p['peak'], p['mmr'])
                     p['t_opp'] += (sum(opps) / 2)
-                    p['t_p_delta'] += (self.players[winners[1-i]]['mmr'] - p['mmr'])
+                    
+                    # Safe APD calculation (0 if 1v1)
+                    partner_ids = [wx for idx, wx in enumerate(winners) if idx != i]
+                    if partner_ids:
+                        p['t_p_delta'] += (self.players[partner_ids[0]]['mmr'] - p['mmr'])
+                        
                     self.wealth_drift += gain
 
                 # Loser Logic
@@ -638,7 +653,11 @@ class FaduMMREngine:
                         l['mmr_start_of_day'] = l['mmr']
                         l['active_this_date'] = True
                         l['is_new_debut'] = True if (is_last_date and l.get('total_games_before_session', 0) == 0) else False
-                    
+
+                    # Safe partner identification for loss logic
+                    partner_ids = [lx for idx, lx in enumerate(losers) if idx != i]
+                    partner = self.players[partner_ids[0]] if partner_ids else l
+
                     loss = 10 if (l['wins'] + l['losses']) < config.ROOKIE_SHIELD_GAMES else 20
                     mmr_gap = abs(l['mmr'] - partner['mmr'])
                     
@@ -654,7 +673,11 @@ class FaduMMREngine:
                         l['mmr'] = max(l['mmr'], config.LEGACY_FLOOR_MIN)
                     
                     l['t_opp'] += (sum([self.players[w]['mmr'] for w in winners]) / 2)
-                    l['t_p_delta'] += (partner['mmr'] - l['mmr'])
+                    
+                    # Safe APD calculation
+                    if partner_ids:
+                        l['t_p_delta'] += (partner['mmr'] - l['mmr'])
+                        
                     self.wealth_drift -= loss
 
         decay_report = []
