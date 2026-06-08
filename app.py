@@ -234,6 +234,11 @@ if display_lb is not None:
             elif col == "Is_Present": display_lb[col] = False
             else: display_lb[col] = 0
 
+    # --- URL DEEP-LINKING INTERCEPTION ---
+    url_player = st.query_params.get("player")
+    def sync_hero_query():
+        st.query_params["player"] = st.session_state.hero_selector
+
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
 
     # --- SHARED UI CONFIGURATIONS ---
@@ -356,17 +361,24 @@ if display_lb is not None:
         st.divider()
 
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
-        
-        # --- DEEP LINKING LOGIC ---
-        query_params = st.query_params
+
+        # --- DEEP LINKING LOGIC (Case-Insensitive Resolution) ---
         default_ix = 0
-        if "player" in query_params and query_params["player"] in player_list:
-            default_ix = player_list.index(query_params["player"])
-        
-        hero = st.selectbox("Select Player Profile:", player_list, index=default_ix)
+        if url_player:
+            for i, p_name in enumerate(player_list):
+                if p_name.lower() == url_player.lower():
+                    default_ix = i
+                    break
+
+        hero = st.selectbox(
+            "Select Player Profile:", 
+            player_list, 
+            index=default_ix,
+            key="hero_selector",
+            on_change=sync_hero_query
+        )
         if hero:
             st.query_params["player"] = hero
-            
         st.divider()
         
         engine = FaduMMREngine()
