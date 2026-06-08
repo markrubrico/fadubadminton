@@ -163,9 +163,9 @@ if is_admin:
             else:
                 with st.spinner("Syncing Major Update..."):
                     engine = FaduMMREngine()
-                    df, last_date, drift, decayed, errors, games_df = engine.simulate(input_area)
-                    st.session_state.lb, st.session_state.drift = df, drift
-                    st.session_state.date, st.session_state.decayed = last_date, decayed 
+                    df, last_date, wealth_drift, decay_report, parse_errors, games_df = engine.simulate(input_area)
+                    st.session_state.lb, st.session_state.drift = df, wealth_drift
+                    st.session_state.date, st.session_state.decayed = last_date, decay_report 
                     st.session_state.parse_errors = errors
                     st.session_state.admin_logs = input_area
                     
@@ -234,12 +234,50 @@ if display_lb is not None:
             elif col == "Is_Present": display_lb[col] = False
             else: display_lb[col] = 0
 
-    # --- URL DEEP-LINKING INTERCEPTION ---
-    url_player = st.query_params.get("player")
-    def sync_hero_query():
-        st.query_params["player"] = st.session_state.hero_selector
+    # --- URL DEEP-LINKING INTERCEPTION & SYNC (Multi-Param) ---
+    player_options = list(display_lb["Player"].unique())
+    tab_options = ["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"]
+    tab_map = {"rankings": tab_options[0], "combat": tab_options[1], "faq": tab_options[2]}
 
-    tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
+    def sync_all_params():
+        """Update URL to reflect current Player and Tab selections."""
+        if "hero_selector" in st.session_state:
+            st.query_params["player"] = st.session_state["hero_selector"]
+            st.session_state["last_url_val"] = st.session_state["hero_selector"]
+        
+        if "nav_selector" in st.session_state:
+            active_val = st.session_state["nav_selector"]
+            # Find the key (rankings, combat, faq) matching the display label
+            active_key = [k for k, v in tab_map.items() if v == active_val][0]
+            st.query_params["tab"] = active_key
+            st.session_state["last_tab_val"] = active_key
+
+    # 1. Intercept Player Changes
+    url_p = st.query_params.get("player")
+    if url_p and url_p != st.session_state.get("last_url_val"):
+        matches = [p for p in player_options if p.lower() == url_p.lower()]
+        if matches:
+            st.session_state["hero_selector"] = matches[0]
+            st.session_state["last_url_val"] = url_p
+            st.rerun()
+
+    # 2. Intercept Tab Changes
+    url_t = st.query_params.get("tab")
+    if url_t and url_t.lower() in tab_map and url_t.lower() != st.session_state.get("last_tab_val"):
+        st.session_state["nav_selector"] = tab_map[url_t.lower()]
+        st.session_state["last_tab_val"] = url_t.lower()
+        st.rerun()
+
+    # --- NAVIGATION CONTROL ---
+    # We use a stateful radio instead of st.tabs to allow for deep-linking
+    active_navigation = st.radio(
+        "Select Section:", 
+        tab_options, 
+        horizontal=True, 
+        key="nav_selector", 
+        on_change=sync_all_params,
+        label_visibility="collapsed"
+    )
 
     # --- SHARED UI CONFIGURATIONS ---
     duo_config = {
@@ -251,8 +289,8 @@ if display_lb is not None:
         "Archetype": st.column_config.TextColumn("Archetype", help="Classification based on team strength and chemistry.")
     }
 
-    # --- TAB 1: RANKINGS ---
-    with tab1:
+    # --- SECTION 1: RANKINGS ---
+    if active_navigation == tab_options[0]:
         st.markdown(f"###### 🌟 Last Session Highlights ({session_date})")
         present_df = display_lb[display_lb['Is_Present'] == True] if 'Is_Present' in display_lb.columns else pd.DataFrame()
         
@@ -349,8 +387,8 @@ if display_lb is not None:
             else:
                 st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
 
-    # --- TAB 2: COMBAT & SYNERGY ---
-    with tab2:
+    # --- SECTION 2: COMBAT & SYNERGY ---
+    if active_navigation == tab_options[1]:
         st.subheader("👥 THE DYNAMIC DUOS LEADERBOARD")
         with st.spinner("Analyzing Team Synergy..."):
             duos_df = get_cached_duos_leaderboard(display_logs)
@@ -362,23 +400,12 @@ if display_lb is not None:
 
         player_list = sorted([p.strip() for p in display_lb['Player'].tolist()])
 
-        # --- DEEP LINKING LOGIC (Case-Insensitive Resolution) ---
-        default_ix = 0
-        if url_player:
-            for i, p_name in enumerate(player_list):
-                if p_name.lower() == url_player.lower():
-                    default_ix = i
-                    break
-
         hero = st.selectbox(
-            "Select Player Profile:", 
+            "👤 Select Hero:", 
             player_list, 
-            index=default_ix,
             key="hero_selector",
-            on_change=sync_hero_query
+            on_change=sync_all_params
         )
-        if hero:
-            st.query_params["player"] = hero
         st.divider()
         
         engine = FaduMMREngine()
@@ -595,8 +622,8 @@ if display_lb is not None:
                 st.plotly_chart(fig_hist, use_container_width=True)
                 st.dataframe(hist_final, use_container_width=True, hide_index=True)
 
-    # --- TAB 3: FAQ & PHILOSOPHY ---
-    with tab3:
+    # --- SECTION 3: FAQ & PHILOSOPHY ---
+    if active_navigation == tab_options[2]:
         st.subheader("📖 FAQ & Game Manual")
         
         if st.button("📜 View Version History", use_container_width=True):
