@@ -597,8 +597,8 @@ if display_lb is not None:
             **While AOD looks at who you are fighting, APD looks at who is helping you.**
 
             **Why does it matter? (The Badminton Example)**
-            *   **Player X** has a high win rate, but their APD is **Positive (+200)**. This means they are almost always paired up with veterans ranked 200 points higher than them. They are being supported.
-            *   **Player Y** has a similar win rate, but their APD is **Negative (-200)**. This means they are constantly paired with partners ranked 200 points lower than them.
+            * **Player X** has a high win rate, but their APD is **Positive (+200)**. This means they are almost always paired up with veterans ranked 200 points higher than them. They are being supported.
+            * **Player Y** has a similar win rate, but their APD is **Negative (-200)**. This means they are constantly paired with partners ranked 200 points lower than them.
 
             Without APD, it looks like they are equal. With APD, the group can see that Player Y is a **"Master Carrier"**—they are winning matches while elevating and dragging lower-ranked partners across the finish line.
 
@@ -606,8 +606,8 @@ if display_lb is not None:
             When you step onto the court, the engine calculates the "Gap" between you and your partner:
             $$\text{Match Delta} = \text{Partner's MMR} - \text{Your MMR}$$
             
-            *   **Negative APD** = You are the higher-rated player in the duo. You are the **Anchor**.
-            *   **Positive APD** = You are the lower-rated player in the duo. You are **Supported**.
+            * **Negative APD** = You are the higher-rated player in the duo. You are the **Anchor**.
+            * **Positive APD** = You are the lower-rated player in the duo. You are **Supported**.
             """)
 
         with st.expander("⚔️ What is AOD (Average Opponent Difficulty)?"):
@@ -618,74 +618,80 @@ if display_lb is not None:
             **While your win rate only shows if you won, AOD shows how hard the fight was.**
 
             **Why does it matter? (The Badminton Example)**
-            *   **Player A** has an 80% win rate, but they mostly play against rookies or lower-ranked players. Their AOD is **Low**.
-            *   **Player B** has a 50% win rate, but they are constantly sharing the court with your group's top-tier, "Mythic"-level players. Their AOD is **High**.
+            * **Player A** has an 80% win rate, but they mostly play against rookies or lower-ranked players. Their AOD is **Low**.
+            * **Player B** has a 50% win rate, but they are constantly sharing the court with your group's top-tier, "Mythic"-level players. Their AOD is **High**.
 
             Without AOD, the leaderboard makes Player A look dominant. With AOD, the group can see that Player B is actually surviving the ultimate gauntlet, making their 50% win rate incredibly impressive.
 
             **How it works in a Match:**
             When you enter a 2v2 match, the engine looks at the average MMR of the two players on the opposing side:
             $$\text{Opponent Team Average MMR} = \frac{\text{Opponent 1 MMR} + \text{Opponent 2 MMR}}{2}$$
-            That number gets added to your running career average. If you constantly face stacked teams, your AOD climbs. If your opponent difficulty is higher than your own ranking, it even triggers the Underdog Bonuses!
+            That number gets added to your running career average. If you constantly face stacked teams, your AOD climbs.
             """)
 
-        with st.expander("� What are Rust Mechanics (Inactivity Decay)?"):
+        with st.expander("🍂 What are Rust Mechanics (Inactivity Decay)?"):
             st.markdown("""
-            **To keep the rankings active and accurate, we use a "Rust" system (Inactivity Decay).**
+            **To keep the rankings active and accurate, we enforce a strict "Rust" penalty for missed attendance.**
             
-            * **The Rule:** If you miss **4 or more consecutive sessions**, your MMR begins to decay.
-            * **The Logic:** Skill fades with inactivity. Decay ensures they don't hold an artificially high rank while inactive.
-            """)
-
-        with st.expander("📊 Data Analysis & The 'Layer of Fun'"):
-            st.markdown("""
-            We believe that badminton is as much a mental game as it is a physical one. By introducing deep-dive analytics—like 
-            **Stamina Curves**, **Dynamic Duos**, and **Rivalry Radars**—we are adding a "Manager Mode" layer to our sessions. 
+            * **The Inactivity Trigger:** If you miss **4 or more consecutive sessions**, your profile is flagged as Rust.
+            * **The Hard Penalty:** The engine automatically deducts a flat **-50 MMR points** for that session and *every single consecutive session* you continue to miss.
+            * **Floor Limits:** Decay cannot push you past your lifetime group floor base (1500 MMR for Seeded players, 1000 MMR for standard players).
+            * **Streak Reset:** Getting hit with a Rust penalty instantly snaps your active win streak back to 0.
             """)
 
         with st.expander("🎭 Archetypes Legend"):
             st.write("""
-            Your **Archetype** is determined by your career stats and playstyle:
-            - **🎖️ The General:** Legend rank or higher who consistently elevates their partners.
-            - **🧪 The Catalyst:** High 'Force Multiplier' (APD). You make every teammate better.
-            - **💎 The Supported:** High win rate while consistently paired with higher-rated veterans.
-            - **🛡️ The Tank:** High 'Opponent Difficulty' (AOD). You face the toughest matchups.
-            - **⚔️ Giant Slayer:** Multiple underdog wins against players 300+ MMR higher than you.
-            - **🔥 The Finisher:** Master of momentum with high session win streaks (4+).
-            - **🦾 Iron Man:** High stamina and volume (30% more games than league average).
-            - **🎯 The Specialist:** High efficiency winner with a 58%+ win rate.
-            - **🐣 New Challenger:** Players still in the Rookie calibration phase.
-            - **🏸 Consistent Force:** The reliable backbone of the community.
+            Your **Archetype** is determined dynamically by your career stats, tier brackets, and court history:
+            - **🎖️ The General:** Established tier leader (1800+ MMR) who carries an APD impact greater than +40.
+            - **🧪 The Catalyst:** Floor Raiser with an extreme career APD greater than +80.
+            - **🛡️ The Tank:** Heavyweight challenger facing an extreme career AOD greater than 1650.
+            - **⚔️ Giant Slayer:** Proven upset artist with 2 or more validated underdog victories.
+            - **🔥 The Finisher:** Momentum driver holding a career peak win streak of 4+ matches.
+            - **🦾 Iron Man:** Gym rat whose game volume is 30% higher than the community average.
+            - **🎯 The Specialist:** Highly efficient winner rocking a premium 58%+ career win rate.
+            - **🐣 New Challenger:** Fresh profiles currently moving through their Rookie placement game count.
+            - **🏸 Consistent Force:** The reliable, balanced backbone of our badminton community.
             """)
 
         with st.expander("👯 How does the Dynamic Duos Leaderboard work?"):
             st.markdown(r"""
             **The Duos Leaderboard tracks the performance of specific 2v2 partnerships.**
             
-            *   **The Entry Requirement:** A pair must play at least **3 games together** to appear on the leaderboard.
-            *   **Combined MMR:** This is the average skill rating of the partnership. It represents the collective "Power Level" of a team. 
+            * **The Entry Requirement:** A pair must play at least **3 games together** to appear on the leaderboard.
+            * **Combined MMR:** This is the average skill rating of the partnership. It represents the collective "Power Level" of a team. 
                 $$\text{Combined MMR} = \frac{\text{Player 1 MMR} + \text{Player 2 MMR}}{2}$$
                 The leaderboard is primarily sorted by this metric to identify the league's top-tier teams.
-            *   **Synergy Delta:** This is the most important metric. It compares the pair's actual win rate against the average win rate of the two individuals when they play with other people.
-                *   **Positive Delta (+):** You play better together than you do apart.
-                *   **Negative Delta (-):** Your styles might be clashing.
-            *   **Duo Archetypes:**
-                *   💖 **The Power Couple:** Synergy Delta > 10%. A match made in heaven.
-                *   🚀 **The Unstoppables:** Win rate of 70% or higher.
-                *   🗼 **Twin Towers:** Both players are high-tier (Combined MMR 2300+).
-                *   🚫 **Oil and Water:** Synergy Delta < -10%. Great players, but a tough fit together.
-                *   ⚖️ **Balanced Duo:** Consistent performance relative to individual skill.
+            * **Synergy Delta:** This is the most important metric. It compares the pair's actual win rate against the average win rate of the two individuals when they play with other people.
+                * **Positive Delta (+):** You play better together than you do apart.
+                * **Negative Delta (-):** Your styles might be clashing.
+            * **Duo Archetypes:**
+                * 💖 **The Power Couple:** Synergy Delta > 10%. A match made in heaven.
+                * 🚀 **The Unstoppables:** Win rate of 70% or higher.
+                * 🗼 **Twin Towers:** Both players are high-tier (Combined MMR 2300+).
+                * 🚫 **Oil and Water:** Synergy Delta < -10%. Great players, but a tough fit together.
+                * ⚖️ **Balanced Duo:** Consistent performance relative to individual skill.
             """)
 
         with st.expander("⚔️ How does the Underdog (Giant Slayer) Bonus work?"):
-            st.write("""
-            If you beat a team where at least one opponent has **300+ MMR more than you**, you get a **Giant Slayer bonus**:
-            - You receive an injection of up to **+80 MMR** on top of your base win points.
-            - These wins are tracked in your Hall of Fame as **'Giants Slayed'**.
+            st.markdown(r"""
+            **Pulling off an upset against a high-tier titan rewards you with a massive MMR point injection.**
+            
+            * **The Trigger Condition:** You step on the court against an opposing team where at least one individual player is ranked **300+ MMR points higher than you**.
+            * **The Bonus Payout:** If you win, you receive a baseline **+40 MMR victory points**, plus a scaling bonus calculated directly from the gap:
+                $$\text{Upset Bonus} = \min(\text{Gap} \times 0.25, 80)$$
+            * **The Maximum Scale:** The maximum underdog bonus injection is capped at **+80 MMR**, meaning a single massive victory can net you up to a whopping **+120 MMR total** in one match.
             """)
 
-        with st.expander("🛡️ What is a Rookie Shield?"):
-            st.write(f"New friends are protected for their first **{config.ROOKIE_SHIELD_GAMES} games**. You gain full MMR for wins, but lose only -10 MMR on losses.")
+        with st.expander("🛡️ What are Rookie and Guardian Shields?"):
+            st.markdown(r"""
+            The backend engine features two built-in safety nets to preserve ranking integrity and mitigate unfair point loss:
+            
+            ### **🐣 The Rookie Shield**
+            New players receive loss mitigation during their initialization window (first 5 games). If a rookie drops a match, they are only penalized a flat **-10 MMR** instead of the standard community **-20 MMR**.
+            
+            ### **🛡️ Guardian 2.0 Protection**
+            An elite-tier algorithm that preserves points when a top-ranked player anchors a massive disparity matchup. If an elite player (`Top 20% of league MMR`) pairs with an underdog where their internal teammate gap is wide (`>= config.GUARDIAN_SHIELD_THRESHOLD`), a defeat triggers the Guardian Shield—mitigating the team's loss down from **-20 MMR to a softer -16 MMR**.
+            """)
 
         with st.expander("💠 What are the Tiers?"):
             st.table(pd.DataFrame([
@@ -693,10 +699,25 @@ if display_lb is not None:
                 {"Tier": "Epic", "MMR Range": "1900-2299"}, {"Tier": "Legend", "MMR Range": "2300-2699"},
                 {"Tier": "Mythic", "MMR Range": "2700-3199"}, {"Tier": "Mythic Glory", "MMR Range": "3200+"}
             ]))
-        
-        st.divider()
-        st.info("💡 **Note:** v6.3.0 Calibration: Inactivity Decay (Rust) is active for players missing 4+ sessions.")
 
+        with st.expander("📈 What is the difference between Tier and Status?"):
+            st.markdown("""
+            The leaderboard separates a player's **Skill Division** from their **Data Reliability state**:
+            
+            ### **1. Tier (Your Skill Bracket)**
+            Your **Tier** (Master, Grandmaster, Epic, etc.) represents your current placement on the competitive ladder based strictly on your exact numerical MMR. It dictates match seeding and underdog calculations.
+            
+            ### **2. Status (Your Rank Reliability)**
+            Your **Status** measures how established, active, and mathematically secure your rating is within the system:
+            *   **🔥 Elite:** Granted to players who are actively playing in high-volume brackets and performing at or above the league's 80th percentile threshold. Their numbers are highly accurate and represent the current peak pace of the group.
+            *   **💎 Stable:** Granted to players who have cleared their placement matches and maintain an established baseline rank. Their rating is firmly calibrated.
+            
+            *Note: If a player is hit by inactivity decay or is playing in their very first session, specific alert badges (like `⚠️ RUST` or `🆕 New Player`) will automatically append to their leaderboard record, but their mathematical foundation remains categorially tracked under these core statuses.*
+            """)
+        
+    st.divider()
+    st.info("💡 **Note:** Manual Calibration Complete. System descriptions align 100% with FaduMMREngine v1.4.9 operational logic.")
+    
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
 
