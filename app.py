@@ -11,6 +11,14 @@ import config # Ensure we import config to access the master list
 from engine import FaduMMREngine
 from auditor import ai_audit_session
 
+def show_version_history():
+    """Displays the version history log."""
+    st.markdown("""
+    ### 📜 Version History
+    - **v6.3.0**: Scoreboard & Robust Parser Update.
+    - **v1.4.9 (Engine)**: Deterministic logic core update implementing Master Spec v4.4.
+    """)
+
 # --- 1. DASHBOARD CONFIGURATION ---
 # Milestone: v6.3.0 - Scoreboard & Robust Parser Update
 st.set_page_config(
@@ -139,7 +147,7 @@ if is_admin:
     c1, c2, _ = st.columns([1.5, 1.5, 4])
 
     with c1:
-        if st.button("🔍 Run Session Audit", width='stretch'):
+        if st.button("🔍 Run Session Audit", use_container_width=True):
             if not input_area.strip(): st.warning("Please paste logs first.")
             else:
                 with st.spinner("Checking logs..."):
@@ -150,7 +158,7 @@ if is_admin:
                     st.session_state.parse_errors = engine.parse_errors
 
     with c2:
-        if st.button("🚀 Calculate & Sync", type="primary", width='stretch'):
+        if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
             if not input_area.strip(): st.warning("Please paste logs first.")
             else:
                 with st.spinner("Syncing Major Update..."):
@@ -227,6 +235,16 @@ if display_lb is not None:
             else: display_lb[col] = 0
 
     tab1, tab2, tab3 = st.tabs(["📊 RANKINGS", "⚔️ COMBAT & SYNERGY", "📖 FAQ"])
+
+    # --- SHARED UI CONFIGURATIONS ---
+    duo_config = {
+        "Rank": st.column_config.NumberColumn("Rank", help="Team standing based on Combined MMR."),
+        "Pair / Duo": st.column_config.TextColumn("Pair / Duo", help="The two players in this partnership."),
+        "Combined MMR": st.column_config.NumberColumn("Combined MMR", help="The average skill rating (Power Level) of the duo. Used for primary ranking."),
+        "Win %": st.column_config.TextColumn("Win %", help="Actual win rate of this specific duo over at least 3 games."),
+        "Synergy Delta": st.column_config.TextColumn("Synergy Delta", help="Performance vs. Expectation. (+) means you play better together than you do apart. (-) means styles may clash."),
+        "Archetype": st.column_config.TextColumn("Archetype", help="Classification based on team strength and chemistry.")
+    }
 
     # --- TAB 1: RANKINGS ---
     with tab1:
@@ -319,15 +337,6 @@ if display_lb is not None:
         st.divider()
         st.subheader("👥 THE DYNAMIC DUOS LEADERBOARD")
         
-        duo_config = {
-            "Rank": st.column_config.NumberColumn("Rank", help="Team standing based on Combined MMR."),
-            "Pair / Duo": st.column_config.TextColumn("Pair / Duo", help="The two players in this partnership."),
-            "Combined MMR": st.column_config.NumberColumn("Combined MMR", help="The average skill rating (Power Level) of the duo. Used for primary ranking."),
-            "Win %": st.column_config.TextColumn("Win %", help="Actual win rate of this specific duo over at least 3 games."),
-            "Synergy Delta": st.column_config.TextColumn("Synergy Delta", help="Performance vs. Expectation. (+) means you play better together than apart. (-) means styles may clash."),
-            "Archetype": st.column_config.TextColumn("Archetype", help="Classification based on team strength and chemistry.")
-        }
-
         with st.spinner("Analyzing Team Synergy..."):
             duos_df = get_cached_duos_leaderboard(display_logs)
             if duos_df is not None:
@@ -518,7 +527,7 @@ if display_lb is not None:
 
         st.divider()
         with st.expander("📜 Career Ledger & History", expanded=False):
-            if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
+            if st.button(f"Analyze {hero}'s Fatigue Curve", use_container_width=True):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
                 
@@ -578,7 +587,7 @@ if display_lb is not None:
     with tab3:
         st.subheader("📖 FAQ & Game Manual")
         
-        if st.button("📜 View Version History", width='stretch'):
+        if st.button("📜 View Version History", use_container_width=True):
             show_version_history()
         
         with st.expander("🏸 Why are we tracking MMR?", expanded=True):
@@ -715,8 +724,8 @@ if display_lb is not None:
             *Note: If a player is hit by inactivity decay or is playing in their very first session, specific alert badges (like `⚠️ RUST` or `🆕 New Player`) will automatically append to their leaderboard record, but their mathematical foundation remains categorially tracked under these core statuses.*
             """)
         
-    st.divider()
-    st.info("💡 **Note:** Manual Calibration Complete. System descriptions align 100% with FaduMMREngine v1.4.9 operational logic.")
+        st.divider()
+        st.info("💡 **Note:** Manual Calibration Complete. System descriptions align 100% with FaduMMREngine v1.4.9 operational logic.")
     
 else:
     st.warning("⚠️ Waiting for Registry Sync...")
