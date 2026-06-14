@@ -262,7 +262,7 @@ class FaduMMREngine:
                                 "Partner": "-", 
                                 "Opponents": "Inactivity", 
                                 "Result": "Penalty",
-                                "Delta": -50, 
+                                "Delta": "-50", 
                                 "Balance": int(round(p['mmr'])),
                                 "Tier": new_tier, 
                                 "Rank Status": change_log

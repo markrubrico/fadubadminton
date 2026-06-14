@@ -147,7 +147,7 @@ if is_admin:
     c1, c2, _ = st.columns([1.5, 1.5, 4])
 
     with c1:
-        if st.button("🔍 Run Session Audit", use_container_width=True):
+        if st.button("🔍 Run Session Audit", width='stretch'):
             if not input_area.strip(): st.warning("Please paste logs first.")
             else:
                 with st.spinner("Checking logs..."):
@@ -158,7 +158,7 @@ if is_admin:
                     st.session_state.parse_errors = engine.parse_errors
 
     with c2:
-        if st.button("🚀 Calculate & Sync", type="primary", use_container_width=True):
+        if st.button("🚀 Calculate & Sync", type="primary", width='stretch'):
             if not input_area.strip(): st.warning("Please paste logs first.")
             else:
                 with st.spinner("Syncing Major Update..."):
@@ -166,7 +166,7 @@ if is_admin:
                     df, last_date, wealth_drift, decay_report, parse_errors, games_df = engine.simulate(input_area)
                     st.session_state.lb, st.session_state.drift = df, wealth_drift
                     st.session_state.date, st.session_state.decayed = last_date, decay_report 
-                    st.session_state.parse_errors = errors
+                    st.session_state.parse_errors = parse_errors
                     st.session_state.admin_logs = input_area
                     
                     if sync_enabled and "BRIDGE_URL" in st.secrets:
@@ -383,7 +383,7 @@ if display_lb is not None:
         with st.spinner("Analyzing Team Synergy..."):
             duos_df = get_cached_duos_leaderboard(display_logs)
             if duos_df is not None:
-                st.dataframe(duos_df, use_container_width=True, hide_index=True, column_config=duo_config)
+                st.dataframe(duos_df, width='stretch', hide_index=True, column_config=duo_config)
             else:
                 st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
 
@@ -393,7 +393,7 @@ if display_lb is not None:
         with st.spinner("Analyzing Team Synergy..."):
             duos_df = get_cached_duos_leaderboard(display_logs)
             if duos_df is not None:
-                st.dataframe(duos_df, use_container_width=True, hide_index=True, column_config=duo_config)
+                st.dataframe(duos_df, width='stretch', hide_index=True, column_config=duo_config)
             else:
                 st.info("Insufficient data for Duo analysis. Pairs must play at least 3 games together.")
         st.divider()
@@ -548,7 +548,7 @@ if display_lb is not None:
                         showlegend=False
                     )
                     fig.add_vline(x=0, line_color="white", line_width=3)
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width='stretch')
                     
                     # Style Matchup Cards (Side-by-side comparison)
                     rival_row = display_lb.loc[display_lb['Player'].str.strip() == rival]
@@ -566,7 +566,7 @@ if display_lb is not None:
 
         st.divider()
         with st.expander("📜 Career Ledger & History", expanded=False):
-            if st.button(f"Analyze {hero}'s Fatigue Curve", use_container_width=True):
+            if st.button(f"Analyze {hero}'s Fatigue Curve", width='stretch'):
                 s_df = engine.get_stamina_analysis(display_logs, hero)
                 if s_df is not None: st.dataframe(s_df, width='stretch', hide_index=True)
                 
@@ -619,14 +619,14 @@ if display_lb is not None:
                     hovermode='x unified'
                 )
                 
-                st.plotly_chart(fig_hist, use_container_width=True)
-                st.dataframe(hist_final, use_container_width=True, hide_index=True)
+                st.plotly_chart(fig_hist, width='stretch')
+                st.dataframe(hist_final, width='stretch', hide_index=True)
 
     # --- SECTION 3: FAQ & PHILOSOPHY ---
     if active_navigation == tab_options[2]:
         st.subheader("📖 FAQ & Game Manual")
         
-        if st.button("📜 View Version History", use_container_width=True):
+        if st.button("📜 View Version History", width='stretch'):
             show_version_history()
         
         with st.expander("🏸 Why are we tracking MMR?", expanded=True):
